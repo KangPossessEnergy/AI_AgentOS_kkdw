@@ -1,8 +1,7 @@
 {
   "name": "AI_agent_os_kkdw",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Agent OS -你的个人生产系统",
   "type": "module",
   "scripts": {
     "dev": "pnpm start",
@@ -13,10 +12,6 @@
   "engines": {
     "node": ">=22"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.15.0",
   "dependencies": {
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"

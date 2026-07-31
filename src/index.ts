@@ -1,3 +1,8 @@
+/**
+ * Agent OS 入口。
+ * 当前阶段（ao-01）：启动 banner + 环境自检。
+ * 后续章节会在这里逐步长出：飞书接入 → 会话内核 → CLI 引擎 → 调度器。
+ */
 import "dotenv/config";
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";

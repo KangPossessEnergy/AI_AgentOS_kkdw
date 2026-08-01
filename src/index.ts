@@ -60,6 +60,26 @@ startBot({
       }),
       hasThread,
     );
+    if (!cardId) {
+      console.error("[卡片] 响应里没有 message_id，无法继续更新");
+      return;
+    }
+    
+    setTimeout(() => {
+      void bot
+        .updateCard(
+          cardId,
+          buildTaskCard({
+            title: "Agent OS 模拟任务",
+            status: "success",
+            progress: 100,
+            detail: "模拟任务已经完成",
+          }),
+        )
+        .catch((error) => {
+          console.error("[卡片] 更新失败:", (error as Error).message);
+        });
+    }, 2_000);
     console.log(`[卡片] 已发送 message_id=${cardId} inThread=${hasThread}`);
   },
 });

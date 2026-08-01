@@ -45,6 +45,7 @@ export interface Bot {
     card: CardJson,
     replyInThread?: boolean,
   ) => Promise<string | undefined>;
+  updateCard: (messageId: string, card: CardJson) => Promise<void>;
 }
 
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
@@ -111,7 +112,6 @@ export function startBot(opts: BotOptions): Bot {
       });
       return res.data?.message_id;
     },
-
     async downloadResource(messageId, fileKey, type, saveDir, fileName) {
       const res = await client.im.v1.messageResource.get({
         path: { message_id: messageId, file_key: fileKey },
@@ -134,6 +134,12 @@ export function startBot(opts: BotOptions): Bot {
         },
       });
       return res.data?.message_id;
+    },
+    async updateCard(messageId, card) {
+      await client.im.v1.message.patch({
+        path: { message_id: messageId },
+        data: { content: JSON.stringify(card) },
+      });
     },
   };
 

@@ -3,7 +3,7 @@
  */
 
 export type CardJson = Record<string, unknown>;
-export type TaskStatus = "running" | "success" | "failed";
+export type TaskStatus = 'running' | 'success' | 'failed';
 
 export interface TaskCardOptions {
   title: string;
@@ -14,9 +14,9 @@ export interface TaskCardOptions {
 }
 
 const STATUS_STYLE = {
-  running: { template: "blue", label: "运行中" },
-  success: { template: "green", label: "已完成" },
-  failed: { template: "red", label: "执行失败" },
+  running: { template: 'blue', label: '运行中' },
+  success: { template: 'green', label: '已完成' },
+  failed: { template: 'red', label: '执行失败' },
 } as const;
 
 function clampProgress(progress: number): number {
@@ -25,7 +25,7 @@ function clampProgress(progress: number): number {
 
 function buildProgressBar(progress: number): string {
   const filled = Math.round(progress / 10);
-  return `${"█".repeat(filled)}${"░".repeat(10 - filled)}`;
+  return `${'█'.repeat(filled)}${'░'.repeat(10 - filled)}`;
 }
 
 export function buildTaskCard(options: TaskCardOptions): CardJson {
@@ -33,44 +33,43 @@ export function buildTaskCard(options: TaskCardOptions): CardJson {
   const style = STATUS_STYLE[options.status];
   const activities = options.activities ?? [];
   const activityText = activities.length
-    ? `\n\n**最近进展**\n${activities.map((item) => `- ${item}`).join("\n")}`
-    : "";
+    ? `\n\n**最近进展**\n${activities.map((item) => `- ${item}`).join('\n')}`
+    : '';
 
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       update_multi: true,
       summary: { content: `${options.title}：${style.label}` },
     },
     header: {
       template: style.template,
-      title: { tag: "plain_text", content: options.title },
+      title: { tag: 'plain_text', content: options.title },
     },
     body: {
-      direction: "vertical",
+      direction: 'vertical',
       elements: [
         {
-          tag: "markdown",
+          tag: 'markdown',
           content: [
             `**状态：** ${style.label}`,
             `**进度：** ${buildProgressBar(progress)} ${progress}%`,
             `**当前：** ${options.detail}${activityText}`,
-          ].join("\n\n"),
+          ].join('\n\n'),
         },
         {
-          tag: "button",
+          tag: 'button',
           text: {
-            tag: "plain_text",
-            content: options.status === "running" ? "任务执行中" : style.label,
+            tag: 'plain_text',
+            content: options.status === 'running' ? '任务执行中' : style.label,
           },
-          type: options.status === "success" ? "primary" : "default",
+          type: options.status === 'success' ? 'primary' : 'default',
           disabled: true,
         },
       ],
     },
   };
 }
-
 
 type UpdateCard = (card: CardJson) => Promise<void>;
 
@@ -87,7 +86,7 @@ export class ThrottledCardUpdater {
   ) {}
 
   push(card: CardJson): void {
-    if (this.closed) throw new Error("卡片更新器已经结束");
+    if (this.closed) throw new Error('卡片更新器已经结束');
     this.pendingCard = card;
     this.schedule();
   }
@@ -100,6 +99,15 @@ export class ThrottledCardUpdater {
     this.pendingCard = undefined;
     await this.updateChain;
     await this.updateCard(finalCard);
+  }
+
+  async cancel(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.pendingCard = undefined;
+    await this.updateChain;
   }
 
   private schedule(): void {

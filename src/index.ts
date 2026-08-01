@@ -6,6 +6,7 @@ import "dotenv/config";
 import { join } from "node:path";
 import { startBot } from "./im/lark.js";
 import { resolveMentions, extractResourceKeys } from "./im/message-parser.js";
+import { buildTaskCard } from "./im/card.js";
 
 const appId = process.env.BOT_A_APP_ID;
 const appSecret = process.env.BOT_A_APP_SECRET;
@@ -48,13 +49,17 @@ startBot({
       }
     }
 
-    // 回复（话题内回复，replyInThread=true）
     const hasThread = !!msg.threadId || !!msg.rootId;
-    const replyId = await bot.reply(
+    const cardId = await bot.replyCard(
       msg.messageId,
-      `收到：${resolved}`,
+      buildTaskCard({
+        title: "Agent OS 模拟任务",
+        status: "running",
+        progress: 0,
+        detail: "正在准备任务环境",
+      }),
       hasThread,
     );
-    console.log(`[已回] message_id=${replyId} inThread=${hasThread}`);
+    console.log(`[卡片] 已发送 message_id=${cardId} inThread=${hasThread}`);
   },
 });

@@ -70,3 +70,55 @@ export function buildTaskCard(options: TaskCardOptions): CardJson {
     },
   };
 }
+
+
+type UpdateCard = (card: CardJson) => Promise<void>;
+
+/** 两秒窗口内无论 push 多少次，只提交最新的一张卡片。 */
+export class ThrottledCardUpdater {
+  private pendingCard: CardJson | undefined;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private updateChain: Promise<void> = Promise.resolve();
+  private closed = false;
+
+  constructor(
+    private readonly updateCard: UpdateCard,
+    private readonly intervalMs = 2_000,
+  ) {}
+
+  push(card: CardJson): void {
+    if (this.closed) throw new Error("卡片更新器已经结束");
+    this.pendingCard = card;
+    this.schedule();
+  }
+
+  async finish(finalCard: CardJson): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.pendingCard = undefined;
+    await this.updateChain;
+    await this.updateCard(finalCard);
+  }
+
+  private schedule(): void {
+    if (this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.flushPending();
+    }, this.intervalMs);
+  }
+
+  private flushPending(): void {
+    const card = this.pendingCard;
+    this.pendingCard = undefined;
+    if (!card || this.closed) return;
+
+    this.updateChain = this.updateChain
+      .then(() => this.updateCard(card))
+      .finally(() => {
+        if (this.pendingCard && !this.closed) this.schedule();
+      });
+  }
+}

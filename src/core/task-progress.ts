@@ -1,4 +1,4 @@
-import type { CliEvent } from "../cli/types.js";
+import type { CliEvent } from '../cli/types.js';
 
 export interface TaskActivity {
   toolName: string;
@@ -17,7 +17,9 @@ export interface TaskProgressSnapshot {
   completedCount: number;
   activities: TaskActivity[];
   contextUsedTokens?: number;
+  contextStartTokens?: number;
   contextWindowTokens?: number;
+  startedNewSession?: boolean;
 }
 
 interface ActiveTool {
@@ -34,19 +36,22 @@ export class TaskProgressTracker {
   private toolCount = 0;
   private completedCount = 0;
   private contextUsedTokens: number | undefined;
+  private contextStartTokens: number | undefined;
 
   constructor(
     private readonly now: () => number = Date.now,
     private readonly contextWindowTokens?: number,
+    private readonly startedNewSession = false,
   ) {
     this.startedAt = now();
   }
 
   accept(event: CliEvent): TaskProgressSnapshot {
-    if (event.type === "context") {
+    if (event.type === 'context') {
+      this.contextStartTokens ??= event.usedTokens;
       this.contextUsedTokens = event.usedTokens;
     }
-    if (event.type === "tool_start") {
+    if (event.type === 'tool_start') {
       this.toolCount += 1;
       this.activeTools.set(event.toolUseId, {
         toolName: event.toolName,
@@ -55,7 +60,7 @@ export class TaskProgressTracker {
         startedAt: this.now(),
       });
     }
-    if (event.type === "tool_end") {
+    if (event.type === 'tool_end') {
       const tool = this.activeTools.get(event.toolUseId);
       if (tool) {
         this.activeTools.delete(event.toolUseId);
@@ -76,8 +81,7 @@ export class TaskProgressTracker {
   snapshot(): TaskProgressSnapshot {
     const active = [...this.activeTools.values()].at(-1);
     return {
-      current:
-        active?.label ?? (this.toolCount ? "正在分析执行结果" : "正在理解任务"),
+      current: active?.label ?? (this.toolCount ? '正在分析执行结果' : '正在理解任务'),
       ...(active ? { currentToolName: active.toolName } : {}),
       ...(active?.detail ? { currentDetail: active.detail } : {}),
       elapsedMs: Math.max(0, this.now() - this.startedAt),
@@ -87,9 +91,13 @@ export class TaskProgressTracker {
       ...(this.contextUsedTokens !== undefined
         ? { contextUsedTokens: this.contextUsedTokens }
         : {}),
+      ...(this.contextStartTokens !== undefined
+        ? { contextStartTokens: this.contextStartTokens }
+        : {}),
       ...(this.contextWindowTokens !== undefined
         ? { contextWindowTokens: this.contextWindowTokens }
         : {}),
+      ...(this.startedNewSession ? { startedNewSession: true } : {}),
     };
   }
 }

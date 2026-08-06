@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { z } from 'zod';
-import type { Session } from './session-manager.js';
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { z } from "zod";
+import type { Session } from "./session-manager.js";
 
 export interface SessionStore {
   load(): Promise<Session[]>;
@@ -12,16 +12,17 @@ const SessionSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
   chatId: z.string().min(1),
-  cliId: z.literal('claude'),
+  cliId: z.enum(["claude", "codex"]),
   cliSessionId: z.string().min(1).optional(),
-  status: z.enum(['creating', 'active', 'idle', 'closed']),
+  status: z.enum(["creating", "active", "idle", "closed"]),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
 
 function recoverInterruptedSession(session: Session): Session {
-  if (session.status !== 'creating' && session.status !== 'active') return session;
-  return { ...session, status: 'idle' };
+  if (session.status !== "creating" && session.status !== "active")
+    return session;
+  return { ...session, status: "idle" };
 }
 
 export class JsonSessionStore implements SessionStore {
@@ -32,9 +33,9 @@ export class JsonSessionStore implements SessionStore {
   async load(): Promise<Session[]> {
     let content: string;
     try {
-      content = await readFile(this.filePath, 'utf8');
+      content = await readFile(this.filePath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw error;
     }
 
@@ -65,7 +66,7 @@ export class JsonSessionStore implements SessionStore {
     const write = async () => {
       await mkdir(dirname(this.filePath), { recursive: true });
       const tempPath = `${this.filePath}.tmp`;
-      await writeFile(tempPath, `${snapshot}\n`, 'utf8');
+      await writeFile(tempPath, `${snapshot}\n`, "utf8");
       await rename(tempPath, this.filePath);
     };
 

@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$(git rev-parse --show-toplevel)/.codex/hooks/lint-changed.sh\"",
+            "timeout": 60,
+            "statusMessage": "Linting changed files"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -119,13 +119,25 @@ function parseStats(event: ClaudeEvent): CliRunStats | undefined {
     : undefined;
 }
 
+function permissionArgs(): string[] {
+  const mode = process.env.CLAUDE_PERMISSION_MODE?.trim();
+  return mode ? ["--permission-mode", mode] : [];
+}
+
 function outputArgs(prompt: string): string[] {
-  return ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+  return [
+    "-p",
+    prompt,
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    ...permissionArgs(),
+  ];
 }
 
 export class ClaudeAdapter implements CliAdapter {
   readonly id = "claude" as const;
-  readonly command = "claude";
+  readonly command = process.env.CLAUDE_BIN?.trim() || "claude";
   readonly displayName = "Claude Code";
 
   buildArgs(prompt: string): string[] {

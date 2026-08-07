@@ -7,6 +7,31 @@
 
 pnpm start（watch 模式）/ pnpm start:once（单次启动）
 
+## 让飞书修改本地项目
+
+机器人进程必须运行在需要修改项目的那台电脑上。先在 `.env` 填写：
+
+```dotenv
+DEFAULT_CLI=codex
+CLI_WORKDIR=/Users/your-name/Developer/your-project
+```
+
+然后启动 `pnpm start`，在飞书新话题发送：
+
+```text
+/codex 修改 src/index.ts，在文件末尾添加一行注释
+```
+
+Codex 会在 `CLI_WORKDIR` 指向的本地目录执行，并且使用 `workspace-write` 沙箱。
+
+Claude Code 的非交互模式没有可点击的权限弹窗。需要自动修改文件时，在 `.env` 设置：
+
+```dotenv
+CLAUDE_PERMISSION_MODE=acceptEdits
+```
+
+只有当飞书机器人只对可信用户开放时，才使用 `CLAUDE_PERMISSION_MODE=bypassPermissions`。
+
 ## 模块地图（随开发生长，只列已存在的）
 
 - src/index.ts — 入口：启动 banner + 环境自检

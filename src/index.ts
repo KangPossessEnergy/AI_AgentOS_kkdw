@@ -200,7 +200,7 @@ async function sendResultNotification(options: {
 }
 
 async function startConfiguredBot(config: BotConfig): Promise<void> {
-  startBot({
+  const startedBot = startBot({
     appId: config.appId,
     appSecret: config.appSecret,
     onCardAction: async (action) => {
@@ -735,6 +735,52 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
           console.log(
             `[CLI] ${cliAdapter.id} 完成 session_id=${result.sessionId ?? "(无)"}`,
           );
+          if (!collaboration) {
+            await sendResultNotification({
+              bot,
+              replyToMessageId: msg.messageId,
+              target: { openId: msg.senderOpenId, name: "" },
+              text: isCompacting
+                ? "上下文整理已完成，请查看上方结果。"
+                : "任务已完成，请查看上方结果。",
+              replyInThread: hasThread,
+            });
+          }
+          if (!isCompacting) {
+            try {
+              if (!collaboration && config.reviewBy) {
+                await sendCollaborationMessage({
+                  senderConfig: config,
+                  senderBot: bot,
+                  replyToMessageId: msg.messageId,
+                  targetBotId: config.reviewBy,
+                  taskId: randomUUID(),
+                  workspaceDir: session.workspaceDir,
+                  prompt: [
+                    "请独立检查当前工作目录中刚完成的实现。",
+                    `原始任务：${taskText}`,
+                    "请直接读取代码和改动，指出明确问题；没有问题时说明检查通过。",
+                  ].join("\n\n"),
+                });
+              } else if (collaboration && senderRuntime) {
+                await sendResultNotification({
+                  bot,
+                  replyToMessageId: msg.messageId,
+                  target: senderRuntime.identity,
+                  text: "代码审查已完成，请查看上方结果。",
+                  replyInThread: hasThread,
+                });
+              }
+            } catch (error) {
+              const message = (error as Error).message;
+              console.error("[协作] 派发失败:", message);
+              await bot.reply(
+                msg.messageId,
+                `协作派发失败：${message}`,
+                hasThread,
+              );
+            }
+          }
         })
         .catch(async (error) => {
           clearInterval(progressHeartbeat);
@@ -785,7 +831,12 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
         });
     },
   });
-  console.log(`[Bot ${config.id.toUpperCase()}] 已连接`);
+  const identity = await startedBot.getIdentity();
+  const runtime = { config, bot: startedBot, identity };
+  botRuntimes.set(config.id, runtime);
+  console.log(
+    `[Bot ${config.id.toUpperCase()}] 已连接 name=${identity.name} open_id=${identity.openId}`,
+  );
 }
 
 await Promise.all(botConfigs.map(startConfiguredBot));

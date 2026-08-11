@@ -11,6 +11,7 @@ export interface Session {
   chatId: string;
   cliId: CliId;
   cliSessionId?: string;
+  workspaceDir: string;
   status: SessionStatus;
   createdAt: string;
   updatedAt: string;
@@ -35,7 +36,7 @@ export interface SessionManagerOptions {
 }
 
 const ALLOWED_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
-  creating: ["active", "closed"],
+  creating: ["active", "idle", "closed"],
   active: ["idle", "closed"],
   idle: ["active", "closed"],
   closed: [],
@@ -90,6 +91,7 @@ export class SessionManager {
     message: MessageAddress,
     cliId: CliId = "claude",
     botId = "default",
+    workspaceDir = process.cwd(),
   ): Promise<ResolvedSession> {
     const threadId = topicIdOf(message);
     const key = sessionKey(botId, message.chatId, threadId);
@@ -103,6 +105,7 @@ export class SessionManager {
       threadId,
       chatId: message.chatId,
       cliId,
+      workspaceDir,
       status: "creating",
       createdAt: now,
       updatedAt: now,
@@ -132,7 +135,7 @@ export class SessionManager {
       status: nextStatus,
       updatedAt: this.now().toISOString(),
     };
-   const key = sessionKey(updated.botId, updated.chatId, updated.threadId);
+    const key = sessionKey(updated.botId, updated.chatId, updated.threadId);
     this.sessions.set(key, updated);
     try {
       await this.persist();
@@ -154,6 +157,33 @@ export class SessionManager {
     const updated: Session = {
       ...current,
       cliSessionId,
+      updatedAt: this.now().toISOString(),
+    };
+    const key = sessionKey(updated.botId, updated.chatId, updated.threadId);
+    this.sessions.set(key, updated);
+    try {
+      await this.persist();
+    } catch (error) {
+      if (this.sessions.get(key) === updated) this.sessions.set(key, current);
+      throw error;
+    }
+    return updated;
+  }
+
+  // 会保留飞书话题，同时让下一条任务重新建立 CLI 会话。
+  async setWorkspaceDir(
+    sessionId: string,
+    workspaceDir: string,
+  ): Promise<Session> {
+    const current = this.get(sessionId);
+    if (!current) throw new Error(`会话不存在: ${sessionId}`);
+    if (!workspaceDir) throw new Error("工作目录不能为空");
+    if (current.workspaceDir === workspaceDir) return current;
+
+    const { cliSessionId: _previousCliSessionId, ...rest } = current;
+    const updated: Session = {
+      ...rest,
+      workspaceDir,
       updatedAt: this.now().toISOString(),
     };
     const key = sessionKey(updated.botId, updated.chatId, updated.threadId);

@@ -111,32 +111,26 @@ export class CodexAdapter implements CliAdapter {
   readonly displayName = "Codex";
 
   buildArgs(prompt: string): string[] {
-    return [
-      "exec",
-      "--json",
-      "--sandbox",
-      "workspace-write",
-      "--skip-git-repo-check",
-      prompt,
-    ];
+    return ["exec", "--yolo", "--json", "--skip-git-repo-check", prompt];
   }
 
   buildResumeArgs(prompt: string, sessionId: string): string[] {
     return [
       "exec",
       "resume",
+      "--yolo",
       "--json",
       "--skip-git-repo-check",
       sessionId,
       prompt,
     ];
   }
-  
+
   buildCompactPlan(sessionId: string) {
     return {
-      protocol: 'codex-app-server' as const,
+      protocol: "codex-app-server" as const,
       command: this.command,
-      args: ['app-server', '--stdio'],
+      args: ["app-server", "--stdio"],
       sessionId,
     };
   }

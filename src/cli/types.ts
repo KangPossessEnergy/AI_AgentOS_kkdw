@@ -1,5 +1,17 @@
 export type CliId = "claude" | "codex";
 
+export type CliCompactPlan =
+  | {
+      protocol: "claude-stream-json";
+      command: string;
+      args: string[];
+    }
+  | {
+      protocol: "codex-app-server";
+      command: string;
+      args: string[];
+      sessionId: string;
+    };
 export interface CliRunStats {
   durationMs?: number;
   turns?: number;
@@ -32,6 +44,7 @@ export interface CliAdapter {
   readonly displayName: string;
   buildArgs(prompt: string): string[];
   buildResumeArgs(prompt: string, sessionId: string): string[];
+  buildCompactPlan(sessionId: string, instructions?: string): CliCompactPlan;
   parseEvents(line: string): CliEvent[];
 }
 

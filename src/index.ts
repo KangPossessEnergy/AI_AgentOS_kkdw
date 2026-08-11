@@ -3,18 +3,29 @@
  * 当前阶段：Agent运行与协作机制
  */
 import "dotenv/config";
-import { join, resolve } from "node:path";
-import { startBot } from "./im/lark.js";
+import { randomUUID } from 'node:crypto';
+import { basename, join, resolve } from 'node:path';
+import {
+  startBot,
+  type Bot,
+  type BotIdentity,
+} from './im/lark.js';
 import {
   answerContinuation,
   answerNeedsContinuation,
   buildResumeCard,
   buildSessionNoticeCard,
   buildTaskCard,
+  buildCollaborationCard,
   splitLongText,
   ThrottledCardUpdater,
 } from "./im/card.js";
 import { resolveMentions, extractResourceKeys } from "./im/message-parser.js";
+import {
+  CollaborationInbox,
+  collaborationTurnKey,
+  type CollaborationMessage,
+} from './core/collaboration.js';
 import { parseCliRequest, parseCommand } from "./core/command-parser.js";
 import { SessionManager, type Session } from "./core/session-manager.js";
 import { JsonSessionStore } from "./core/session-store.js";
@@ -56,6 +67,14 @@ const sessions = await SessionManager.open({
 
 const activeRuns = new Map<string, ActiveRun>();
 const contextWindows = new Map<string, number>();
+interface BotRuntime {
+  config: BotConfig;
+  bot: Bot;
+  identity: BotIdentity;
+}
+const botRuntimes = new Map<string, BotRuntime>();
+const processedCollaborationTurns = new Set<string>();
+const collaborationInbox = new CollaborationInbox();
 
 console.log("Agent OS 启动，正在建立飞书长连接…");
 console.log(
@@ -113,6 +132,75 @@ async function markSessionIdle(sessionId: string): Promise<void> {
   if (sessions.get(sessionId)?.status !== "active") return;
   await sessions.transition(sessionId, "idle");
   console.log(`[会话] id=${sessionId} status=idle`);
+}
+
+async function sendCollaborationMessage(options: {
+  senderConfig: BotConfig;
+  senderBot: Bot;
+  replyToMessageId: string;
+  targetBotId: string;
+  taskId: string;
+  workspaceDir: string;
+  prompt: string;
+}): Promise<void> {
+  const target = botRuntimes.get(options.targetBotId);
+  if (!target) throw new Error(`协作 bot 尚未就绪: ${options.targetBotId}`);
+  const collaboration: CollaborationMessage = {
+    dispatchId: randomUUID().replaceAll("-", "").slice(0, 12),
+    taskId: options.taskId,
+    fromBotId: options.senderConfig.id,
+    toBotId: options.targetBotId,
+    workspaceDir: options.workspaceDir,
+    prompt: options.prompt,
+  };
+  collaborationInbox.register(collaboration);
+  try {
+    const cardMessageId = await options.senderBot.replyCard(
+      options.replyToMessageId,
+      buildCollaborationCard({
+        senderName:
+          botRuntimes.get(options.senderConfig.id)?.identity.name ??
+          options.senderConfig.id,
+        targetName: target.identity.name,
+        workspaceName: basename(options.workspaceDir),
+        prompt: options.prompt,
+      }),
+      true,
+    );
+    if (!cardMessageId) throw new Error("飞书没有返回协作卡片 message_id");
+    const mentionMessageId = await options.senderBot.replyMention(
+      cardMessageId,
+      target.identity,
+      `新的代码审查任务（任务编号：${collaboration.dispatchId}），请查看上方卡片。`,
+      true,
+    );
+    if (!mentionMessageId) throw new Error("飞书没有返回协作通知 message_id");
+  } catch (error) {
+    collaborationInbox.consume(collaboration.dispatchId, collaboration.toBotId);
+    throw error;
+  }
+  console.log(
+    `[协作] task=${options.taskId} ${options.senderConfig.id} -> ${options.targetBotId}`,
+  );
+}
+
+async function sendResultNotification(options: {
+  bot: Bot;
+  replyToMessageId: string;
+  target: BotIdentity;
+  text: string;
+  replyInThread: boolean;
+}): Promise<void> {
+  try {
+    await options.bot.replyMention(
+      options.replyToMessageId,
+      options.target,
+      options.text,
+      options.replyInThread,
+    );
+  } catch (error) {
+    console.error("[通知] 结果通知发送失败:", (error as Error).message);
+  }
 }
 
 async function startConfiguredBot(config: BotConfig): Promise<void> {
@@ -596,7 +684,6 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
                   progress: snapshot,
                   answer: result.answer,
                   stats: result.stats,
-                  recipientOpenId: msg.senderOpenId,
                 }),
           );
           if (!isCompacting && answerNeedsContinuation(result.answer)) {

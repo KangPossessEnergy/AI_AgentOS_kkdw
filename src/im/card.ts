@@ -32,7 +32,6 @@ export interface TaskCardOptions {
   answer?: string;
   stats?: CliRunStats;
   technicalDetail?: string;
-  recipientOpenId?: string;
   abortSessionId?: string;
 }
 
@@ -335,13 +334,6 @@ function buildFinishedElements(
           content: `${meta || options.detail}${activityText}`,
         },
       ],
-    });
-  }
-  if (options.status === "success" && options.recipientOpenId) {
-    elements.push({ tag: "hr" });
-    elements.push({
-      tag: "markdown",
-      content: `**Agent OS** · 发送给：<at id=${options.recipientOpenId}></at>`,
     });
   }
   return elements;

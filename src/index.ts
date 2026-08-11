@@ -3,13 +3,9 @@
  * 当前阶段：Agent运行与协作机制
  */
 import "dotenv/config";
-import { randomUUID } from 'node:crypto';
-import { basename, join, resolve } from 'node:path';
-import {
-  startBot,
-  type Bot,
-  type BotIdentity,
-} from './im/lark.js';
+import { randomUUID } from "node:crypto";
+import { basename, join, resolve } from "node:path";
+import { startBot, type Bot, type BotIdentity } from "./im/lark.js";
 import {
   answerContinuation,
   answerNeedsContinuation,
@@ -25,7 +21,7 @@ import {
   CollaborationInbox,
   collaborationTurnKey,
   type CollaborationMessage,
-} from './core/collaboration.js';
+} from "./core/collaboration.js";
 import { parseCliRequest, parseCommand } from "./core/command-parser.js";
 import { SessionManager, type Session } from "./core/session-manager.js";
 import { JsonSessionStore } from "./core/session-store.js";
@@ -296,6 +292,39 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
     },
     onMessage: async (msg, bot) => {
       const resolved = resolveMentions(msg.text, msg.mentions);
+      let senderRuntime: BotRuntime | undefined;
+      let collaboration: CollaborationMessage | undefined;
+      if (msg.senderType === "app" || msg.senderType === "bot") {
+        const currentRuntime = botRuntimes.get(config.id);
+        const mentionedCurrentBot = currentRuntime
+          ? msg.mentions.some(
+              (mention) => mention.openId === currentRuntime.identity.openId,
+            )
+          : false;
+        const dispatchId = msg.text.match(/任务编号：([a-f0-9]{12})/)?.[1];
+        const pending =
+          msg.messageType === "post" && mentionedCurrentBot && dispatchId
+            ? collaborationInbox.consume(dispatchId, config.id)
+            : undefined;
+        if (!pending) {
+          console.log(
+            `[协作] 忽略非目标 bot 消息 sender=${msg.senderOpenId} target=${config.id}`,
+          );
+          return;
+        }
+        senderRuntime = botRuntimes.get(pending.fromBotId);
+        if (!senderRuntime) {
+          console.log(`[协作] 找不到来源 bot: ${pending.fromBotId}`);
+          return;
+        }
+        const turnKey = collaborationTurnKey(pending);
+        if (processedCollaborationTurns.has(turnKey)) {
+          console.log(`[协作] 忽略重复消息 ${turnKey}`);
+          return;
+        }
+        processedCollaborationTurns.add(turnKey);
+        collaboration = pending;
+      }
       const hasThread = !!msg.threadId || !!msg.rootId;
       const command = parseCommand(resolved);
       const cliRequest = parseCliRequest(resolved);
@@ -311,7 +340,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
         msg,
         cliRequest?.cliId ?? config.defaultCliId,
         config.id,
-        config.workspaceDir,
+        collaboration?.workspaceDir ?? config.workspaceDir,
       );
 
       let { session } = resolvedSession;
@@ -321,7 +350,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
       }
       const cliAdapter = getCliAdapter(session.cliId);
       const isCompacting = command?.name === "compact";
-      const taskText = cliRequest?.prompt ?? resolved;
+      const taskText = collaboration?.prompt ?? cliRequest?.prompt ?? resolved;
       const prompt = buildBotPrompt(config.systemPrompt, taskText);
       const taskCardTitle = isCompacting
         ? "整理上下文"
@@ -541,6 +570,16 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
         return;
       }
 
+      if (
+        collaboration &&
+        session.workspaceDir !== collaboration.workspaceDir
+      ) {
+        await ensureWorkspaceDirectory(collaboration.workspaceDir);
+        session = await sessions.setWorkspaceDir(
+          session.id,
+          collaboration.workspaceDir,
+        );
+      }
       await sessions.transition(session.id, "active");
       const run = new AbortController();
       const activeRun: ActiveRun = {

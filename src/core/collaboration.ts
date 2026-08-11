@@ -1,17 +1,18 @@
 //程序内部的交接单
 export interface CollaborationMessage {
-  dispatchId: string;//标识当前这一次投递
-  taskId: string;//标识整项协作
-  fromBotId: string;//
+  dispatchId: string; //标识当前这一次投递
+  taskId: string; //标识整项协作
+  fromBotId: string; //
   toBotId: string;
+  round: number;
+  maxRounds: number;
   workspaceDir: string;
   prompt: string;
 }
 
 export function collaborationTurnKey(message: CollaborationMessage): string {
-  return `${message.taskId}:${message.toBotId}`;
+   return `${message.taskId}:${message.round}:${message.toBotId}`;
 }
-
 
 //做两件事：
 // 发送前用 register() 登记, 目标 bot 收到任务编号后用consume() 领取。

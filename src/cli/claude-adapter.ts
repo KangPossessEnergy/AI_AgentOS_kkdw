@@ -119,19 +119,20 @@ function parseStats(event: ClaudeEvent): CliRunStats | undefined {
     : undefined;
 }
 
-function permissionArgs(): string[] {
-  const mode = process.env.CLAUDE_PERMISSION_MODE?.trim();
-  return mode ? ["--permission-mode", mode] : [];
-}
+// function permissionArgs(): string[] {
+//   const mode = process.env.CLAUDE_PERMISSION_MODE?.trim();
+//   return mode ? ["--permission-mode", mode] : [];
+// }
 
 function outputArgs(prompt: string): string[] {
   return [
+    "--dangerously-skip-permissions",
     "-p",
     prompt,
     "--output-format",
     "stream-json",
     "--verbose",
-    ...permissionArgs(),
+    // ...permissionArgs(),
   ];
 }
 
@@ -148,12 +149,12 @@ export class ClaudeAdapter implements CliAdapter {
     return ["--resume", sessionId, ...outputArgs(prompt)];
   }
 
-    buildCompactPlan(sessionId: string, instructions?: string) {
+  buildCompactPlan(sessionId: string, instructions?: string) {
     const command = instructions?.trim()
       ? `/compact ${instructions.trim()}`
-      : '/compact';
+      : "/compact";
     return {
-      protocol: 'claude-stream-json' as const,
+      protocol: "claude-stream-json" as const,
       command: this.command,
       args: this.buildResumeArgs(command, sessionId),
     };

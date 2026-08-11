@@ -1,6 +1,6 @@
 /**
  * Agent OS 入口。
- * 当前阶段：飞书消息驱动 Claude Code / Codex 完成任务。
+ * 当前阶段：Agent运行与协作机制
  */
 import "dotenv/config";
 import { join, resolve } from "node:path";

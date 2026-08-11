@@ -40,3 +40,8 @@ export interface CliRunResult {
   sessionId?: string;
   stats?: CliRunStats;
 }
+export interface CliSessionSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}

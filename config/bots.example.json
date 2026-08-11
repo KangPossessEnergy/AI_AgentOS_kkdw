@@ -6,7 +6,9 @@
       "appSecretEnv": "FEISHU_DEVELOPER_APP_SECRET",
       "defaultCli": "claude",
       "systemPrompt": "你是主力开发助手，负责理解需求并完成实现。",
-      "workspace": "."
+      "workspace": ".",
+      "reviewBy": "reviewer",
+      "collaborationMaxRounds": 2
     },
     {
       "id": "reviewer",
@@ -15,6 +17,8 @@
       "defaultCli": "codex",
       "workspace": ".",
       "systemPrompt": "你是审查助手，负责检查实现、发现风险并给出修改建议。",
+      "reviewBy": "reviewer",
+      "collaborationMaxRounds": 2,
       "enabled": true
     }
   ]

@@ -1,4 +1,5 @@
 import type { CliAdapter, CliEvent, CliRunStats } from "./types.js";
+import { CLARIFICATION_TOOL_NAME, codexAppToolArgs } from "./app-tools.js";
 
 interface CodexEvent {
   type?: unknown;
@@ -111,12 +112,20 @@ export class CodexAdapter implements CliAdapter {
   readonly displayName = "Codex";
 
   buildArgs(prompt: string): string[] {
-    return ["exec", "--yolo", "--json", "--skip-git-repo-check", prompt];
+    return [
+      "exec",
+      ...codexAppToolArgs(),
+      "--yolo",
+      "--json",
+      "--skip-git-repo-check",
+      prompt,
+    ];
   }
 
   buildResumeArgs(prompt: string, sessionId: string): string[] {
     return [
       "exec",
+      ...codexAppToolArgs(),
       "resume",
       "--yolo",
       "--json",

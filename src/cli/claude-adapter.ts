@@ -1,4 +1,8 @@
 import type { CliAdapter, CliEvent, CliRunStats } from "./types.js";
+import {
+  CLAUDE_CLARIFICATION_TOOL_NAME,
+  claudeAppToolArgs,
+} from "./app-tools.js";
 
 interface ClaudeEvent {
   type?: unknown;
@@ -132,6 +136,7 @@ function outputArgs(prompt: string): string[] {
     "--output-format",
     "stream-json",
     "--verbose",
+    ...claudeAppToolArgs(),
     // ...permissionArgs(),
   ];
 }

@@ -1,6 +1,6 @@
 /**
  * Agent OS 入口。
- * 当前阶段：Agent运行与协作机制
+ * 当前阶段：搭建Agent团队工作流
  */
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
@@ -417,7 +417,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
         );
         return;
       }
-      
+
       if (command?.name === "team") {
         await bot.replyCard(
           msg.messageId,

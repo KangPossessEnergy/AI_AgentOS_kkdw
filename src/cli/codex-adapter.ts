@@ -178,13 +178,26 @@ export class CodexAdapter implements CliAdapter {
     const tool = toolInfo(item);
     if (!tool) return [];
     if (event.type === "item.started") {
-      return [
+      const events: CliEvent[] = [
         {
           type: "tool_start",
           toolUseId: item.id,
           ...tool,
         },
       ];
+      if (
+        item.type === "mcp_tool_call" &&
+        item.server === "agent_os" &&
+        item.tool === CLARIFICATION_TOOL_NAME
+      ) {
+        events.push({
+          type: "tool_call",
+          toolUseId: item.id,
+          toolName: CLARIFICATION_TOOL_NAME,
+          input: item.arguments ?? item.input,
+        });
+      }
+      return events;
     }
     if (event.type === "item.completed") {
       const exitCode = asNumber(item.exit_code);

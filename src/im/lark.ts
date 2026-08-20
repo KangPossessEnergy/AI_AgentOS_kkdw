@@ -7,6 +7,34 @@ import { extname, join } from "node:path";
 import { parseMentions, type Mention } from "./message-parser.js";
 import type { CardJson } from "./card.js";
 
+export interface Bot {
+  client: Lark.Client;
+  getIdentity: () => Promise<BotIdentity>;
+  reply: (
+    messageId: string,
+    text: string,
+    replyInThread?: boolean,
+  ) => Promise<string | undefined>;
+  replyCard: (
+    messageId: string,
+    card: CardJson,
+    replyInThread?: boolean,
+  ) => Promise<string | undefined>;
+  updateCard: (messageId: string, card: CardJson) => Promise<void>;
+  downloadResource: (
+    messageId: string,
+    fileKey: string,
+    type: "image" | "file",
+    saveDir: string,
+    fileName?: string,
+  ) => Promise<string>;
+  replyMention: (
+    messageId: string,
+    target: BotIdentity,
+    text: string,
+    replyInThread?: boolean,
+  ) => Promise<string | undefined>;
+}
 export interface IncomingMessage {
   messageId: string;
   chatId: string;
@@ -17,6 +45,7 @@ export interface IncomingMessage {
   threadId: string;
   senderType: string;
   senderOpenId: string;
+  senderUnionId: string;
   mentions: Mention[];
   rawContent: string;
 }
@@ -45,42 +74,36 @@ export interface CardActionResponse {
   card?: { type: "raw"; data: CardJson };
 }
 
-export function parseCardAction(data: any): CardAction {
-  const value = data?.action?.value;
-  return {
-    operatorOpenId: data?.operator?.open_id ?? data?.operator_id?.open_id ?? "",
-    messageId: data?.context?.open_message_id ?? data?.open_message_id ?? "",
-    value: isRecord(value) ? value : {},
-  };
+export interface CardAction {
+  operatorOpenId: string;
+  operatorUnionId: string;
+  messageId: string;
+  value: Record<string, unknown>;
+  formValue: Record<string, unknown>;
 }
 
-export interface Bot {
-  client: Lark.Client;
-  getIdentity: () => Promise<BotIdentity>;
-  reply: (
-    messageId: string,
-    text: string,
-    replyInThread?: boolean,
-  ) => Promise<string | undefined>;
-  replyCard: (
-    messageId: string,
-    card: CardJson,
-    replyInThread?: boolean,
-  ) => Promise<string | undefined>;
-  updateCard: (messageId: string, card: CardJson) => Promise<void>;
-  downloadResource: (
-    messageId: string,
-    fileKey: string,
-    type: "image" | "file",
-    saveDir: string,
-    fileName?: string,
-  ) => Promise<string>;
-  replyMention: (
-    messageId: string,
-    target: BotIdentity,
-    text: string,
-    replyInThread?: boolean,
-  ) => Promise<string | undefined>;
+export interface CardActionResponse {
+  toast?: { type: "success" | "info" | "warning" | "error"; content: string };
+  card?: { type: "raw"; data: CardJson };
+}
+
+interface PostElement {
+  tag?: string;
+  text?: string;
+  user_id?: string;
+}
+
+export function parseCardAction(data: any): CardAction {
+  const value = data?.action?.value;
+  const formValue = data?.action?.form_value;
+  return {
+    operatorOpenId: data?.operator?.open_id ?? data?.operator_id?.open_id ?? "",
+    operatorUnionId:
+      data?.operator?.union_id ?? data?.operator_id?.union_id ?? "",
+    messageId: data?.context?.open_message_id ?? data?.open_message_id ?? "",
+    value: isRecord(value) ? value : {},
+    formValue: isRecord(formValue) ? formValue : {},
+  };
 }
 
 export function buildMentionPostContent(
@@ -142,12 +165,6 @@ function resourceExtension(
 
   const mime = contentType.split(";", 1)[0].trim().toLowerCase();
   return CONTENT_TYPE_EXTENSIONS[mime] ?? (type === "image" ? "img" : "bin");
-}
-
-interface PostElement {
-  tag?: string;
-  text?: string;
-  user_id?: string;
 }
 
 function renderPostElement(element: PostElement): string {
@@ -262,6 +279,7 @@ export function startBot(opts: BotOptions): Bot {
         threadId: m.thread_id ?? "",
         senderType: data.sender.sender_type ?? "",
         senderOpenId: data.sender.sender_id?.open_id ?? "",
+        senderUnionId: data.sender.sender_id?.union_id ?? "",
         mentions: parseMentions(m.mentions),
         rawContent: m.content,
       };

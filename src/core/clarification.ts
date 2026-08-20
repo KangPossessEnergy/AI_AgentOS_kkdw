@@ -31,7 +31,7 @@ export interface ClarificationAnswer {
 
 export interface ClarificationFlow {
   token: string;// 标识当前卡片
-  taskId?: string; //绑定飞书话题
+  taskId: string; //绑定飞书话题
   botId: string;
   sessionId: string; //指向 Agent OS 会话
   ownerOpenId: string; //用来限制答题人
@@ -45,7 +45,7 @@ export interface ClarificationFlow {
 }
 
  export interface CreateClarificationFlowOptions {
-   taskId?: string;
+   taskId: string;
    botId: string;
    sessionId: string;
    ownerOpenId: string;

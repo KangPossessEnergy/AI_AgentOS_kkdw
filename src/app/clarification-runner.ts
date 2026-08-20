@@ -137,8 +137,7 @@ export async function continueClarificationFlow(options: {
       );
 
       const productSpecFlow = runtime.productSpecFlows.create({
-        // taskId: String(flow.taskId),
-         taskId: flow.taskId,
+        taskId: flow.taskId,
         botId: config.id,
         ownerOpenId: flow.ownerOpenId,
         ownerUnionId: flow.ownerUnionId,

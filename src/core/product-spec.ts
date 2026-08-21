@@ -129,7 +129,7 @@ export class ProductSpecFlowStore {
     for (const flow of this.flows.values()) {
       if (
         flow.botId === botId &&
-        flow.status === "pending" &&
+        (flow.status === "pending" || flow.status === "approved") &&
         flow.request.deliveryMode === "lark-doc" &&
         documentToken(flow.request.documentUrl) === fileToken
       )

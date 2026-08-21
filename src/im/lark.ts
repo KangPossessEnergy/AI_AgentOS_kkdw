@@ -11,16 +11,17 @@ export const FEISHU_TEXT_LIMIT = 3_000;
 export const FEISHU_MENTION_LIMIT = 1_200;
 export const FEISHU_COMMENT_LIMIT = 1_000;
 
+export interface IncomingDocumentComment {
+  eventId: string;
+  fileToken: string;
+  fileType: string;
+  commentId: string;
+  replyId: string;
+  senderOpenId: string;
+  senderUnionId: string;
+  mentionedBot: boolean;
+}
 export interface Bot {
-  subscribeToDocumentComments: () => Promise<void>;
-  replyToDocumentComment: (
-    comment: IncomingDocumentComment,
-    text: string,
-  ) => Promise<void>;
-  setDocumentCommentWorking: (
-    comment: IncomingDocumentComment,
-    active: boolean,
-  ) => Promise<void>;
   client: Lark.Client;
   getIdentity: () => Promise<BotIdentity>;
   reply: (
@@ -47,6 +48,15 @@ export interface Bot {
     text: string,
     replyInThread?: boolean,
   ) => Promise<string | undefined>;
+  subscribeToDocumentComments: () => Promise<void>;
+  replyToDocumentComment: (
+    comment: IncomingDocumentComment,
+    text: string,
+  ) => Promise<void>;
+  setDocumentCommentWorking: (
+    comment: IncomingDocumentComment,
+    active: boolean,
+  ) => Promise<void>;
 }
 export interface IncomingMessage {
   messageId: string;
@@ -65,17 +75,6 @@ export interface IncomingMessage {
 export interface BotIdentity {
   openId: string;
   name: string;
-}
-
-export interface IncomingDocumentComment {
-  eventId: string;
-  fileToken: string;
-  fileType: string;
-  commentId: string;
-  replyId: string;
-  senderOpenId: string;
-  senderUnionId: string;
-  mentionedBot: boolean;
 }
 
 export interface BotOptions {
@@ -232,7 +231,7 @@ export function fitFeishuText(text: string, maxLength: number): string {
 }
 
 export function startBot(opts: BotOptions): Bot {
-  const { appId, appSecret, onMessage, onCardAction } = opts;
+  const { appId, appSecret, onMessage, onDocumentComment, onCardAction } = opts;
 
   const client = new Lark.Client({ appId, appSecret });
 
@@ -380,6 +379,24 @@ export function startBot(opts: BotOptions): Bot {
         rawContent: m.content,
       };
       await onMessage(msg, bot);
+    },
+    "drive.notice.comment_add_v1": async (data) => {
+      if (!onDocumentComment) return;
+      const meta = data.notice_meta;
+      if (!meta?.file_token || !meta.file_type || !data.comment_id) return;
+      await onDocumentComment(
+        {
+          eventId: data.event_id ?? "",
+          fileToken: meta.file_token,
+          fileType: meta.file_type,
+          commentId: data.comment_id,
+          replyId: data.reply_id ?? "",
+          senderOpenId: meta.from_user_id?.open_id ?? "",
+          senderUnionId: meta.from_user_id?.union_id ?? "",
+          mentionedBot: data.is_mentioned ?? false,
+        },
+        bot,
+      );
     },
   });
 

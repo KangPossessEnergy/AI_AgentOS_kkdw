@@ -183,7 +183,6 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
   const startedBot = startBot({
     appId: config.appId,
     appSecret: config.appSecret,
-
     onDocumentComment: config.skills.includes("lark-drive")
       ? async (comment, bot) => scheduleDocumentComment(config, bot, comment)
       : undefined,
@@ -704,21 +703,22 @@ function scheduleDocumentComment(
   );
   if (!flow) return;
 
-  const eventKey =
-    comment.eventId ||
-    [comment.fileToken, comment.commentId, comment.replyId].join(":");
+  const eventKey = comment.eventId || [
+    comment.fileToken,
+    comment.commentId,
+    comment.replyId,
+  ].join(':');
   if (processedDocumentCommentEvents.has(eventKey)) return;
   rememberDocumentCommentEvent(eventKey);
 
-  const workingReaction = bot
-    .setDocumentCommentWorking(comment, true)
+  const workingReaction = bot.setDocumentCommentWorking(comment, true)
     .then(() => true)
     .catch((error) => {
-      console.warn("添加处理中表情失败，继续执行:", error);
+      console.warn('添加处理中表情失败，继续执行:', error);
       return false;
     });
-  const previous =
-    documentCommentQueues.get(flow.sessionId) ?? Promise.resolve();
+  const previous = documentCommentQueues.get(flow.sessionId)
+    ?? Promise.resolve();
   const queued = Promise.all([
     previous.catch(() => undefined),
     workingReaction,
@@ -732,20 +732,17 @@ function scheduleDocumentComment(
       });
     } finally {
       if (reactionAdded) {
-        await bot
-          .setDocumentCommentWorking(comment, false)
-          .catch((error) => console.warn("移除处理中表情失败:", error));
+        await bot.setDocumentCommentWorking(comment, false)
+          .catch((error) => console.warn('移除处理中表情失败:', error));
       }
     }
   });
   documentCommentQueues.set(flow.sessionId, queued);
   void queued
-    .catch((error) =>
-      bot.replyToDocumentComment(
-        comment,
-        `这条评论暂时没有处理完成：${(error as Error).message}`,
-      ),
-    )
+    .catch((error) => bot.replyToDocumentComment(
+      comment,
+      `这条评论暂时没有处理完成：${(error as Error).message}`,
+    ))
     .finally(() => {
       if (documentCommentQueues.get(flow.sessionId) === queued) {
         documentCommentQueues.delete(flow.sessionId);
@@ -756,12 +753,12 @@ function scheduleDocumentComment(
 function rememberDocumentCommentEvent(eventKey: string): void {
   processedDocumentCommentEvents.add(eventKey);
   if (
-    processedDocumentCommentEvents.size <=
-    MAX_REMEMBERED_DOCUMENT_COMMENT_EVENTS
-  )
-    return;
+    processedDocumentCommentEvents.size
+    <= MAX_REMEMBERED_DOCUMENT_COMMENT_EVENTS
+  ) return;
   const oldest = processedDocumentCommentEvents.values().next().value;
   if (oldest) processedDocumentCommentEvents.delete(oldest);
 }
+
 
 await Promise.all(botConfigs.map(startConfiguredBot));

@@ -90,17 +90,10 @@ export function isProductSpecOwner(
   return flow.ownerOpenId === operator.operatorOpenId;
 }
 
-function documentToken(documentUrl: string): string | undefined {
-  const match = /^\/docx\/([A-Za-z0-9_-]+)\/?$/.exec(
-    new URL(documentUrl).pathname,
-  );
-  return match?.[1];
-}
-
 export class ProductSpecFlowStore {
   private readonly flows = new Map<string, ProductSpecFlow>();
 
-    constructor(initialFlows: ProductSpecFlow[] = []) {
+  constructor(initialFlows: ProductSpecFlow[] = []) {
     for (const flow of initialFlows) {
       this.flows.set(flow.token, flow);
     }
@@ -129,14 +122,6 @@ export class ProductSpecFlowStore {
     return this.flows.get(token);
   }
 
-  approve(token: string): ProductSpecFlow | undefined {
-    const flow = this.flows.get(token);
-    if (!flow || flow.status !== "pending") return undefined;
-    flow.status = "approved";
-    flow.approvedAt = new Date().toISOString();
-    return flow;
-  }
-
   findPendingByDocument(
     botId: string,
     fileToken: string,
@@ -153,6 +138,14 @@ export class ProductSpecFlowStore {
     return undefined;
   }
 
+  approve(token: string): ProductSpecFlow | undefined {
+    const flow = this.flows.get(token);
+    if (!flow || flow.status !== "pending") return undefined;
+    flow.status = "approved";
+    flow.approvedAt = new Date().toISOString();
+    return flow;
+  }
+
   protected snapshot(): ProductSpecFlow[] {
     return structuredClone([...this.flows.values()]);
   }
@@ -163,4 +156,11 @@ export class ProductSpecFlowStore {
       this.flows.set(flow.token, flow);
     }
   }
+}
+
+function documentToken(documentUrl: string): string | undefined {
+  const match = /^\/docx\/([A-Za-z0-9_-]+)\/?$/.exec(
+    new URL(documentUrl).pathname,
+  );
+  return match?.[1];
 }

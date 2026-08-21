@@ -5,7 +5,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { basename, join, resolve } from "node:path";
-import { startBot, type Bot } from "./im/lark.js";
+import { IncomingDocumentComment, startBot, type Bot } from "./im/lark.js";
 import {
   answerContinuation,
   answerNeedsContinuation,
@@ -57,6 +57,8 @@ import {
   ProductSpecFlowStore,
 } from "./core/product-spec.js";
 import { assertProductSpecDocuments } from "./app/product-spec-documents.js";
+import { JsonProductSpecFlowStore } from "./core/product-spec-store.js";
+import { runProductDocumentComment } from "./app/product-comment-runner.js";
 
 const botConfigPath = resolve(
   process.env.BOTS_CONFIG ?? join("config", "bots.json"),
@@ -88,7 +90,12 @@ const botRuntimes = new Map<string, BotRuntime>();
 const processedCollaborationTurns = new Set<string>();
 const collaborationInbox = new CollaborationInbox();
 const clarificationFlows = new ClarificationFlowStore();
-const productSpecFlows = new ProductSpecFlowStore();
+const productSpecFlows = new JsonProductSpecFlowStore(
+  join("data", "product-spec-flows.json"),
+);
+const processedDocumentCommentEvents = new Set<string>();
+const documentCommentQueues = new Map<string, Promise<void>>();
+const MAX_REMEMBERED_DOCUMENT_COMMENT_EVENTS = 1_000;
 const runtime: AppRuntime = {
   sessions,
   teamRegistry,
@@ -176,7 +183,10 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
   const startedBot = startBot({
     appId: config.appId,
     appSecret: config.appSecret,
-    onCardAction: createCardActionHandler({ runtime, config }),
+
+    onDocumentComment: config.skills.includes("lark-drive")
+      ? async (comment, bot) => scheduleDocumentComment(config, bot, comment)
+      : undefined,
     onMessage: async (msg, bot) => {
       const resolved = resolveMentions(msg.text, msg.mentions);
       let senderRuntime: BotRuntime | undefined;
@@ -487,6 +497,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
             const flow = productSpecFlows.create({
               taskId,
               botId: config.id,
+              sessionId: session.id,
               ownerOpenId: msg.senderOpenId,
               ownerUnionId: msg.senderUnionId,
               request: productSpecRequest,
@@ -668,13 +679,89 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
           console.error("[任务] 回传或收尾失败:", (error as Error).message);
         });
     },
+    onCardAction: createCardActionHandler({ runtime, config }),
   });
   const identity = await startedBot.getIdentity();
   const botRuntime = { config, bot: startedBot, identity, clarificationFlows };
   botRuntimes.set(config.id, botRuntime);
+  if (config.skills.includes("lark-drive")) {
+    await startedBot.subscribeToDocumentComments();
+  }
   console.log(
     `[Bot ${config.id.toUpperCase()}] 已连接 name=${identity.name} open_id=${identity.openId}`,
   );
+}
+
+function scheduleDocumentComment(
+  config: BotConfig,
+  bot: Bot,
+  comment: IncomingDocumentComment,
+): void {
+  if (!comment.mentionedBot) return;
+  const flow = productSpecFlows.findPendingByDocument(
+    config.id,
+    comment.fileToken,
+  );
+  if (!flow) return;
+
+  const eventKey =
+    comment.eventId ||
+    [comment.fileToken, comment.commentId, comment.replyId].join(":");
+  if (processedDocumentCommentEvents.has(eventKey)) return;
+  rememberDocumentCommentEvent(eventKey);
+
+  const workingReaction = bot
+    .setDocumentCommentWorking(comment, true)
+    .then(() => true)
+    .catch((error) => {
+      console.warn("添加处理中表情失败，继续执行:", error);
+      return false;
+    });
+  const previous =
+    documentCommentQueues.get(flow.sessionId) ?? Promise.resolve();
+  const queued = Promise.all([
+    previous.catch(() => undefined),
+    workingReaction,
+  ]).then(async ([, reactionAdded]) => {
+    try {
+      await runProductDocumentComment({
+        runtime,
+        bot,
+        flow,
+        comment,
+      });
+    } finally {
+      if (reactionAdded) {
+        await bot
+          .setDocumentCommentWorking(comment, false)
+          .catch((error) => console.warn("移除处理中表情失败:", error));
+      }
+    }
+  });
+  documentCommentQueues.set(flow.sessionId, queued);
+  void queued
+    .catch((error) =>
+      bot.replyToDocumentComment(
+        comment,
+        `这条评论暂时没有处理完成：${(error as Error).message}`,
+      ),
+    )
+    .finally(() => {
+      if (documentCommentQueues.get(flow.sessionId) === queued) {
+        documentCommentQueues.delete(flow.sessionId);
+      }
+    });
+}
+
+function rememberDocumentCommentEvent(eventKey: string): void {
+  processedDocumentCommentEvents.add(eventKey);
+  if (
+    processedDocumentCommentEvents.size <=
+    MAX_REMEMBERED_DOCUMENT_COMMENT_EVENTS
+  )
+    return;
+  const oldest = processedDocumentCommentEvents.values().next().value;
+  if (oldest) processedDocumentCommentEvents.delete(oldest);
 }
 
 await Promise.all(botConfigs.map(startConfiguredBot));

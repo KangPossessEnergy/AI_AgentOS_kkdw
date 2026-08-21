@@ -1,6 +1,6 @@
 /* 定义产品文档的提交格式  */
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 const WorkspaceDocumentPathSchema = z
@@ -18,49 +18,51 @@ const ProductSpecBaseSchema = z.object({
   summary: z.string().trim().min(1).max(500),
 });
 
-const LarkDocumentUrlSchema = z.url().refine(
-  (value) => /\/(?:docx|wiki)\//.test(new URL(value).pathname),
-  'documentUrl 必须是飞书云文档或知识库文档链接',
-);
+const LarkDocumentUrlSchema = z
+  .url()
+  .refine(
+    (value) => /\/docx\//.test(new URL(value).pathname),
+    "documentUrl 必须是飞书 Docx 文档链接",
+  );
 
 export const LocalProductSpecRequestSchema = ProductSpecBaseSchema.extend({
-  deliveryMode: z.literal('local'),
+  deliveryMode: z.literal("local"),
   specPath: WorkspaceDocumentPathSchema,
   ticketsPath: WorkspaceDocumentPathSchema,
 }).strict();
 
 export const LarkProductSpecRequestSchema = ProductSpecBaseSchema.extend({
-  deliveryMode: z.literal('lark-doc'),
+  deliveryMode: z.literal("lark-doc"),
   documentUrl: LarkDocumentUrlSchema,
 }).strict();
 
-export const ProductSpecRequestSchema = z.discriminatedUnion('deliveryMode', [
+export const ProductSpecRequestSchema = z.discriminatedUnion("deliveryMode", [
   LocalProductSpecRequestSchema,
   LarkProductSpecRequestSchema,
 ]);
 
 export type ProductSpecRequest = z.infer<typeof ProductSpecRequestSchema>;
 
-
 export type LocalProductSpecRequest = z.infer<
   typeof LocalProductSpecRequestSchema
 >;
 
-
 export interface ProductSpecFlow {
   token: string;
-  taskId: string;// 把方案绑定到飞书话题对应的产品任务，
+  taskId: string; // 把方案绑定到飞书话题对应的产品任务，
   botId: string; // 保证卡片只能由提交方案的产品机器人处理。
+  sessionId: string;
   ownerOpenId: string; // 用来验证操作者。
   ownerUnionId?: string; // 用来验证操作者。
   request: ProductSpecRequest;
-  status: 'pending' | 'approved' | 'expired';
+  status: "pending" | "approved" | "expired";
   approvedAt?: string;
 }
 
 export interface CreateProductSpecFlowOptions {
   taskId: string;
   botId: string;
+  sessionId: string;
   ownerOpenId: string;
   ownerUnionId?: string;
   request: ProductSpecRequest;
@@ -78,10 +80,8 @@ export function findProductSpecRequest(
   return undefined;
 }
 
-
-
 export function isProductSpecOwner(
-  flow: Pick<ProductSpecFlow, 'ownerOpenId' | 'ownerUnionId'>,
+  flow: Pick<ProductSpecFlow, "ownerOpenId" | "ownerUnionId">,
   operator: { operatorOpenId: string; operatorUnionId?: string },
 ): boolean {
   if (flow.ownerUnionId && operator.operatorUnionId) {
@@ -90,23 +90,36 @@ export function isProductSpecOwner(
   return flow.ownerOpenId === operator.operatorOpenId;
 }
 
+function documentToken(documentUrl: string): string | undefined {
+  const match = /^\/docx\/([A-Za-z0-9_-]+)\/?$/.exec(
+    new URL(documentUrl).pathname,
+  );
+  return match?.[1];
+}
+
 export class ProductSpecFlowStore {
   private readonly flows = new Map<string, ProductSpecFlow>();
+
+    constructor(initialFlows: ProductSpecFlow[] = []) {
+    for (const flow of initialFlows) {
+      this.flows.set(flow.token, flow);
+    }
+  }
 
   create(options: CreateProductSpecFlowOptions): ProductSpecFlow {
     for (const flow of this.flows.values()) {
       if (
-        flow.taskId === options.taskId
-        && flow.botId === options.botId
-        && flow.status === 'pending'
+        flow.taskId === options.taskId &&
+        flow.botId === options.botId &&
+        flow.status === "pending"
       ) {
-        flow.status = 'expired';
+        flow.status = "expired";
       }
     }
     const flow: ProductSpecFlow = {
-      token: randomUUID().replaceAll('-', ''),
+      token: randomUUID().replaceAll("-", ""),
       ...options,
-      status: 'pending',
+      status: "pending",
     };
     this.flows.set(flow.token, flow);
     return flow;
@@ -118,9 +131,36 @@ export class ProductSpecFlowStore {
 
   approve(token: string): ProductSpecFlow | undefined {
     const flow = this.flows.get(token);
-    if (!flow || flow.status !== 'pending') return undefined;
-    flow.status = 'approved';
+    if (!flow || flow.status !== "pending") return undefined;
+    flow.status = "approved";
     flow.approvedAt = new Date().toISOString();
     return flow;
+  }
+
+  findPendingByDocument(
+    botId: string,
+    fileToken: string,
+  ): ProductSpecFlow | undefined {
+    for (const flow of this.flows.values()) {
+      if (
+        flow.botId === botId &&
+        flow.status === "pending" &&
+        flow.request.deliveryMode === "lark-doc" &&
+        documentToken(flow.request.documentUrl) === fileToken
+      )
+        return flow;
+    }
+    return undefined;
+  }
+
+  protected snapshot(): ProductSpecFlow[] {
+    return structuredClone([...this.flows.values()]);
+  }
+
+  protected restore(flows: ProductSpecFlow[]): void {
+    this.flows.clear();
+    for (const flow of flows) {
+      this.flows.set(flow.token, flow);
+    }
   }
 }

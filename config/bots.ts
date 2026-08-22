@@ -8,3 +8,14 @@
  * 
  * 
  */
+
+
+/**
+ * 工作流：grill-with-docs → to-spec → to-tickets → implement → code-review
+ * grill-me：纯拷问——问完直接开始开发了，对其结果在对话里
+ * to-spec：把共识合成需求文档
+ * to-tickets：把spec拆成一个个详细任务
+ * implement：按TDD逐个实现。 TDD：测试驱动开发。
+ * code-review：对着 diff 做一轮独立审查
+ * 
+ */

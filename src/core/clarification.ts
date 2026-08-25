@@ -37,6 +37,7 @@ export interface ClarificationFlow {
   sessionId: string; //指向 Agent OS 会话
   ownerOpenId: string; //用来限制答题人
   ownerUnionId?: string; //用来限制答题人
+  collaboration?: CollaborationOrigin;
   originalMessageId: string;
   cardMessageId?: string;
   replyInThread: boolean;

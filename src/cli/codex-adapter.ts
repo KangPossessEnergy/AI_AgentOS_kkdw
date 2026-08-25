@@ -1,8 +1,13 @@
-import type { CliAdapter, CliEvent, CliRunStats } from "./types.js";
+import type {
+  CliAdapter,
+  CliPromptInput,
+  CliEvent,
+  CliRunStats,
+} from "./types.js";
 import {
   CLARIFICATION_TOOL_NAME,
-  CLAUDE_DISPATCH_TASK_TOOL_NAME,
   PRODUCT_SPEC_TOOL_NAME,
+  DISPATCH_TASK_TOOL_NAME,
   codexAppToolArgs,
 } from "./app-tools.js";
 
@@ -116,28 +121,46 @@ export class CodexAdapter implements CliAdapter {
   readonly command = "codex";
   readonly displayName = "Codex";
 
-  buildArgs(prompt: string): string[] {
-    return [
-      "exec",
+  buildArgs(prompt: string, promptInput: CliPromptInput): string[] {
+    const args = [
       ...codexAppToolArgs(),
-      "--yolo",
+      "exec",
       "--json",
       "--skip-git-repo-check",
-      prompt,
     ];
+    // Windows 上沙箱功能不支持，必须完全禁用；approvals 也一并绕过。
+    if (process.platform === "win32") {
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    } else {
+      args.push("--yolo");
+    }
+    // 从 stdin 读取 prompt，规避 Windows 下 shell 参数转义问题。
+    args.push(promptInput === "stdin" ? "-" : prompt);
+    return args;
   }
 
-  buildResumeArgs(prompt: string, sessionId: string): string[] {
-    return [
-      "exec",
+  buildResumeArgs(
+    prompt: string,
+    sessionId: string,
+    promptInput: CliPromptInput,
+  ): string[] {
+    const args = [
       ...codexAppToolArgs(),
+      "exec",
       "resume",
-      "--yolo",
       "--json",
       "--skip-git-repo-check",
       sessionId,
-      prompt,
     ];
+    // Windows 上沙箱功能不支持，必须完全禁用；approvals 也一并绕过。
+    if (process.platform === "win32") {
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    } else {
+      args.push("--yolo");
+    }
+    // 从 stdin 读取 prompt，规避 Windows 下 shell 参数转义问题。
+    args.push(promptInput === "stdin" ? "-" : prompt);
+    return args;
   }
 
   buildCompactPlan(sessionId: string) {
@@ -148,6 +171,7 @@ export class CodexAdapter implements CliAdapter {
       sessionId,
     };
   }
+
   parseEvents(line: string): CliEvent[] {
     let event: CodexEvent;
     try {
@@ -195,7 +219,7 @@ export class CodexAdapter implements CliAdapter {
         item.server === "agent_os" &&
         (item.tool === CLARIFICATION_TOOL_NAME ||
           item.tool === PRODUCT_SPEC_TOOL_NAME ||
-          item.tool === CLAUDE_DISPATCH_TASK_TOOL_NAME)
+          item.tool === DISPATCH_TASK_TOOL_NAME)
       ) {
         events.push({
           type: "tool_call",

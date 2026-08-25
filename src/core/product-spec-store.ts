@@ -7,6 +7,7 @@ import {
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import {
+  CollaborationOriginSchema,
   ProductSpecRequestSchema,
   ProductSpecFlowStore,
   type CreateProductSpecFlowOptions,
@@ -20,6 +21,7 @@ const ProductSpecFlowSchema = z.object({
   sessionId: z.string().min(1),
   ownerOpenId: z.string().min(1),
   ownerUnionId: z.string().min(1).optional(),
+  collaboration: CollaborationOriginSchema.optional(),
   request: ProductSpecRequestSchema,
   status: z.enum(['pending', 'approved', 'expired']),
   approvedAt: z.iso.datetime().optional(),
@@ -79,4 +81,3 @@ export class JsonProductSpecFlowStore extends ProductSpecFlowStore {
     renameSync(temporaryPath, this.filePath);
   }
 }
-

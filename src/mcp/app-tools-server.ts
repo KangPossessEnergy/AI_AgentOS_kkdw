@@ -2,12 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ClarificationRequestSchema } from "../core/clarification.js";
 import { ProductSpecRequestSchema } from "../core/product-spec.js";
+import { DispatchTaskRequestSchema } from "../core/collaboration.js";
 import {
   CLARIFICATION_TOOL_NAME,
-  CLAUDE_DISPATCH_TASK_TOOL_NAME,
   PRODUCT_SPEC_TOOL_NAME,
+  DISPATCH_TASK_TOOL_NAME,
 } from "../cli/app-tools.js";
-import { DispatchTaskRequestSchema } from "../core/collaboration.js";
 
 const server = new McpServer({
   name: "agent-os",
@@ -21,7 +21,7 @@ server.registerTool(
     description: [
       "当产品需求仍有会实质影响方案的歧义时，调用此工具向用户展示飞书问题卡片。",
       "一次最多提交 5 个问题，每题提供 2 到 4 个清晰选项。",
-      "调用后停止继续推断，等待用户在卡片中回答。",
+      "提交后不要自行补全用户答案，本轮回复可以简短收束。",
     ].join(""),
     inputSchema: ClarificationRequestSchema,
   },
@@ -60,25 +60,27 @@ server.registerTool(
   }),
 );
 
- server.registerTool(
-   CLAUDE_DISPATCH_TASK_TOOL_NAME,
-   {
-     title: '把任务交给团队成员',
-     description: [
-       '把任务确定性地交给一名已注册的长期团队成员。',
-       '只有 CEO 助理可以在运行时调用；产品经理和开发者调用会被拒绝。',
-       'targetBotId 必须是团队名单中的成员 id，不能填写自己。',
-       'objective 写协作目标，instruction 写交给对方的完整要求，expectedOutput 写期望产出。',
-       '调用后停止工作，等待对方完成并把结果交回。',
-     ].join(''),
-     inputSchema: DispatchTaskRequestSchema,
-   },
-   async () => ({
-     content: [{
-       type: 'text',
-       text: '派发请求已交给 Agent OS，等待协作任务送达目标成员。',
-     }],
-   }),
- );
+server.registerTool(
+  DISPATCH_TASK_TOOL_NAME,
+  {
+    title: "把任务交给团队成员",
+    description: [
+      "把任务确定性地交给一名已注册的长期团队成员。",
+      "只有 CEO 助理可以在运行时调用；产品经理和开发者调用会被拒绝。",
+      "targetBotId 必须是团队名单中的成员 id，不能填写自己。",
+      "objective 写协作目标，instruction 写交给对方的完整要求，expectedOutput 写期望产出。",
+      "调用后停止工作，等待对方完成并把结果交回。",
+    ].join(""),
+    inputSchema: DispatchTaskRequestSchema,
+  },
+  async () => ({
+    content: [
+      {
+        type: "text",
+        text: "派发请求已交给 Agent OS，等待协作任务送达目标成员。",
+      },
+    ],
+  }),
+);
 
 await server.connect(new StdioServerTransport());

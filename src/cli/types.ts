@@ -1,5 +1,7 @@
 export type CliId = "claude" | "codex";
 
+export type CliPromptInput = 'argument' | 'stdin';
+
 export type CliCompactPlan =
   | {
       protocol: "claude-stream-json";
@@ -48,8 +50,12 @@ export interface CliAdapter {
   readonly id: CliId;
   readonly command: string;
   readonly displayName: string;
-  buildArgs(prompt: string): string[];
-  buildResumeArgs(prompt: string, sessionId: string): string[];
+  buildArgs(prompt: string, promptInput: CliPromptInput): string[];
+  buildResumeArgs(
+    prompt: string,
+    sessionId: string,
+    promptInput: CliPromptInput,
+  ): string[];
   buildCompactPlan(sessionId: string, instructions?: string): CliCompactPlan;
   parseEvents(line: string): CliEvent[];
 }

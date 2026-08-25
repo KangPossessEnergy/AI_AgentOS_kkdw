@@ -56,6 +56,14 @@ export interface CollaborationOrigin {
   maxRounds: number;
 }
 
+export const CollaborationOriginSchema = z.object({
+  taskId: z.string().min(1),
+  fromBotId: z.string().min(1),
+  reportToBotId: z.string().min(1),
+  round: z.number().int().min(1),
+  maxRounds: z.number().int().min(1),
+});
+
 export interface ProductSpecFlow {
   token: string;
   taskId: string; // 把方案绑定到飞书话题对应的产品任务，

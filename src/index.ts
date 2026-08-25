@@ -152,6 +152,9 @@ async function startConfiguredBot(
             )
           : false;
         const dispatchId = msg.text.match(/任务编号：([a-f0-9]{12})/)?.[1];
+        console.log(
+          `[协作] 检查消息 sender=${msg.senderOpenId} type=${msg.messageType} mentioned=${mentionedCurrentBot} dispatchId=${dispatchId ?? "(无)"} text=${msg.text.slice(0, 120) || "(空)"}`,
+        );
         const pending =
           msg.messageType === "post" && mentionedCurrentBot && dispatchId
             ? collaborationInbox.consume(dispatchId, config.id)

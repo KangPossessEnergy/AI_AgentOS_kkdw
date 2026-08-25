@@ -212,7 +212,11 @@ export function extractMessageText(
     return parsed.text ?? "";
   }
   if (messageType === "post") {
-    const paragraphs: PostElement[][] = parsed.content ?? [];
+    const localizedPost =
+      isRecord(parsed.zh_cn) && Array.isArray(parsed.zh_cn.content)
+        ? parsed.zh_cn
+        : parsed;
+    const paragraphs: PostElement[][] = localizedPost.content ?? [];
     return paragraphs
       .map((paragraph) => paragraph.map(renderPostElement).join(""))
       .filter(Boolean)

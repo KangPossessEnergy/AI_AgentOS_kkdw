@@ -1,3 +1,4 @@
+import type { CardAction, CardActionResponse } from "../im/lark.js";
 import {
   buildClarificationCard,
   buildClarificationContinuingCard,
@@ -5,23 +6,25 @@ import {
   buildProductSpecExpiredCard,
   buildResumeCard,
 } from "../im/card.js";
-import type { AppRuntime } from "./runtime.js";
-import { getCliAdapter } from "../cli/registry.js";
-import type { BotConfig } from "../core/bot-registry.js";
-import { requestTaskAbort } from "../core/task-abort.js";
+import type { BotConfig, ProductDeliveryMode } from "../core/bot-registry.js";
 import { isClarificationOwner } from "../core/clarification.js";
 import { isProductSpecOwner } from "../core/product-spec.js";
+import { requestTaskAbort } from "../core/task-abort.js";
+import { getCliAdapter } from "../cli/registry.js";
 import { listNativeCliSessions } from "../cli/native-sessions.js";
-import type { CardAction, CardActionResponse } from "../im/lark.js";
 import { continueClarificationFlow } from "./clarification-runner.js";
+import type { CollaborationService } from "./collaboration-service.js";
+import type { AppRuntime } from "./runtime.js";
 
 export function createCardActionHandler(options: {
   runtime: AppRuntime;
   config: BotConfig;
+  collaborationService: CollaborationService;
+  defaultProductDeliveryMode: ProductDeliveryMode;
 }): (action: CardAction) => Promise<CardActionResponse | undefined> {
-  const { runtime, config } = options;
+  const { runtime, config, collaborationService, defaultProductDeliveryMode } =
+    options;
   return async (action) => {
-    
     if (action.value.action === "approve_product_spec") {
       const flowToken =
         typeof action.value.flowToken === "string"
@@ -57,6 +60,52 @@ export function createCardActionHandler(options: {
       const approved = runtime.productSpecFlows.approve(flowToken);
       if (!approved) {
         return { toast: { type: "warning", content: "方案状态已经更新。" } };
+      }
+      if (approved.collaboration) {
+        const botRuntime = runtime.botRuntimes.get(config.id);
+        if (!botRuntime) {
+          return { toast: { type: "error", content: "当前 Bot 尚未就绪。" } };
+        }
+        const collaboration = approved.collaboration;
+        const productDescription =
+          approved.request.deliveryMode === "lark-doc"
+            ? `文档 URL：${approved.request.documentUrl}`
+            : `Spec：${approved.request.specPath}\nTickets：${approved.request.ticketsPath}`;
+        try {
+          await collaborationService.dispatch({
+            senderConfig: config,
+            senderBot: botRuntime.bot,
+            replyToMessageId: action.messageId,
+            targetBotId: collaboration.reportToBotId,
+            taskId: collaboration.taskId,
+            ownerOpenId: approved.ownerOpenId,
+            ownerUnionId: approved.ownerUnionId,
+            reportToBotId: collaboration.reportToBotId,
+            objective: `产品方案已确认：${approved.request.title}`,
+            instruction: [
+              `${config.role} 已经完成产品方案，用户确认通过。`,
+              `方案标题：${approved.request.title}`,
+              `方案摘要：${approved.request.summary}`,
+              productDescription,
+              `确认记录：${approved.approvedAt ?? ""}`,
+              "请基于这份已确认方案继续组织后续工作：需要开发者实现时，使用 dispatch_task 把方案交给 developer。",
+            ].join("\n\n"),
+            expectedOutput:
+              "继续推进原任务，或在已经完成时向用户给出最终结论。",
+            round: collaboration.round + 1,
+            maxRounds: collaboration.maxRounds,
+            workspaceDir:
+              runtime.sessions.get(approved.sessionId)?.workspaceDir ??
+              config.workspaceDir,
+          });
+        } catch (error) {
+          return {
+            toast: {
+              type: "error",
+              content: `确认结果交回失败：${(error as Error).message}`,
+            },
+          };
+        }
       }
       return {
         toast: { type: "success", content: "产品方案已确认。" },
@@ -171,7 +220,7 @@ export function createCardActionHandler(options: {
           ownerOpenId: answered.flow.ownerOpenId,
         });
         runtime.clarificationFlows.delete(flowToken);
-        //不会创建新线程。它让当前回调先把 toast 和新卡片交给飞书，随后仍在同一个 Node.js 进程里启动异步 CLI 工作。
+        //       //不会创建新线程。它让当前回调先把 toast 和新卡片交给飞书，随后仍在同一个 Node.js 进程里启动异步 CLI 工作。
         queueMicrotask(() => {
           void continueClarificationFlow({
             runtime,
@@ -179,6 +228,7 @@ export function createCardActionHandler(options: {
             config,
             flow: answered.flow,
             run,
+            defaultDeliveryMode: defaultProductDeliveryMode,
           }).catch((error) => {
             console.error("[澄清] 继续执行失败:", (error as Error).message);
           });
@@ -268,7 +318,7 @@ export function createCardActionHandler(options: {
     }
     if (outcome === "forbidden") {
       return {
-        toast: { type: "warning", content: "只有任务发起人可以停止它。" },
+        toast: { type: "warning", content: "无法识别操作者，无法停止任务。" },
       };
     }
     if (outcome === "already_stopping") {

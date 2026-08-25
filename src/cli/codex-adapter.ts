@@ -1,6 +1,7 @@
 import type { CliAdapter, CliEvent, CliRunStats } from "./types.js";
 import {
   CLARIFICATION_TOOL_NAME,
+  CLAUDE_DISPATCH_TASK_TOOL_NAME,
   PRODUCT_SPEC_TOOL_NAME,
   codexAppToolArgs,
 } from "./app-tools.js";
@@ -193,7 +194,8 @@ export class CodexAdapter implements CliAdapter {
         item.type === "mcp_tool_call" &&
         item.server === "agent_os" &&
         (item.tool === CLARIFICATION_TOOL_NAME ||
-          item.tool === PRODUCT_SPEC_TOOL_NAME)
+          item.tool === PRODUCT_SPEC_TOOL_NAME ||
+          item.tool === CLAUDE_DISPATCH_TASK_TOOL_NAME)
       ) {
         events.push({
           type: "tool_call",

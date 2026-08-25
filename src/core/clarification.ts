@@ -21,6 +21,7 @@
 
 import { z } from "zod";
 import { randomUUID } from 'node:crypto';
+import { CollaborationOrigin } from "./product-spec";
 
 export interface ClarificationAnswer {
   questionId: string;
@@ -45,15 +46,16 @@ export interface ClarificationFlow {
 }
 
  export interface CreateClarificationFlowOptions {
-   taskId: string;
-   botId: string;
-   sessionId: string;
-   ownerOpenId: string;
-   ownerUnionId?: string;
-   originalMessageId: string;
-   cardMessageId?: string;
-   replyInThread: boolean;
-   request: ClarificationRequest;
+  taskId: string;
+  botId: string;
+  sessionId: string;
+  ownerOpenId: string;
+  ownerUnionId?: string;
+  collaboration?: CollaborationOrigin;
+  originalMessageId: string;
+  cardMessageId?: string;
+  replyInThread: boolean;
+  request: ClarificationRequest;
  }
 
 const OptionSchema = z.object({

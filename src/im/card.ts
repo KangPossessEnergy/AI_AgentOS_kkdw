@@ -55,8 +55,11 @@ export interface TaskCardOptions {
 export interface CollaborationCardOptions {
   senderName: string;
   targetName: string;
+  reportToName: string;
   workspaceName: string;
-  prompt: string;
+  objective: string;
+  instruction: string;
+  expectedOutput?: string;
   round: number;
   maxRounds: number;
 }
@@ -597,88 +600,83 @@ export function buildSessionNoticeCard(
 export function buildCollaborationCard(
   options: CollaborationCardOptions,
 ): CardJson {
-  const isReviewRequest = options.round === 1;
   const isLastRound = options.round >= options.maxRounds;
-  const title = isReviewRequest ? "代码审查已发起" : "审查意见已返回";
-  const action = isReviewRequest ? "请接手检查" : "请确认并处理反馈";
-  const description = isReviewRequest
-    ? "开发任务已经完成，现在进入独立审查。"
-    : "审查已经完成，反馈已交回开发侧。";
+  const title = '协作任务已派发';
   const footer = isLastRound
-    ? "这是本次协作的最后一轮，处理完成后流程结束。"
-    : `完成后，结果会自动交回 ${options.senderName}。`;
+    ? `这是当前任务允许的最后一次交接；结果会通知 ${options.reportToName}，由他决定下一步。`
+    : `完成后，结果会自动交回 ${options.reportToName} 继续组织后续工作。`;
+
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       update_multi: true,
-      summary: {
-        content: `${title}：${options.senderName} → ${options.targetName}`,
-      },
+      summary: { content: `${title}：${options.objective}` },
     },
     header: {
-      template: "blue",
-      title: { tag: "plain_text", content: title },
+      template: 'blue',
+      title: { tag: 'plain_text', content: title },
       subtitle: {
-        tag: "plain_text",
+        tag: 'plain_text',
         content: `${options.senderName} → ${options.targetName}`,
       },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
+      direction: 'vertical',
+      vertical_spacing: '12px',
       elements: [
         {
-          tag: "markdown",
-          content: `**${options.targetName}，${action}**\n\n${description}`,
+          tag: 'markdown',
+          content: `**${options.targetName}，请接手：${escapeFeishuMarkdown(options.objective)}**`,
         },
         {
-          tag: "column_set",
-          flex_mode: "none",
-          horizontal_spacing: "16px",
+          tag: 'column_set',
+          flex_mode: 'none',
+          horizontal_spacing: '16px',
           columns: [
             {
-              tag: "column",
-              width: "weighted",
+              tag: 'column',
+              width: 'weighted',
               weight: 3,
-              elements: [
-                {
-                  tag: "markdown",
-                  content: `**项目**\n${escapeFeishuMarkdown(options.workspaceName)}`,
-                },
-              ],
+              elements: [{
+                tag: 'markdown',
+                content: `**项目**\n${escapeFeishuMarkdown(options.workspaceName)}`,
+              }],
             },
             {
-              tag: "column",
-              width: "weighted",
+              tag: 'column',
+              width: 'weighted',
               weight: 2,
-              elements: [
-                {
-                  tag: "markdown",
-                  content: `**当前环节**\n${isReviewRequest ? "独立审查" : "处理反馈"}`,
-                },
-              ],
+              elements: [{
+                tag: 'markdown',
+                content: `**结果交给**\n${escapeFeishuMarkdown(options.reportToName)}`,
+              }],
             },
           ],
         },
         {
-          tag: "collapsible_panel",
+          tag: 'collapsible_panel',
           expanded: false,
-          header: collapsibleHeader(
-            isReviewRequest ? "查看审查说明" : "查看审查反馈",
-          ),
-          vertical_spacing: "8px",
-          padding: "8px 8px 8px 8px",
-          elements: [
-            {
-              tag: "markdown",
-              content: escapeFeishuMarkdown(
-                markdownPreview(options.prompt, MAX_CARD_ANSWER_LENGTH),
-              ),
-            },
-          ],
+          header: collapsibleHeader('查看任务说明'),
+          vertical_spacing: '8px',
+          padding: '8px 8px 8px 8px',
+          elements: [{
+            tag: 'markdown',
+            content: escapeFeishuMarkdown(
+              markdownPreview(options.instruction, MAX_CARD_ANSWER_LENGTH),
+            ),
+          }],
         },
-        { tag: "hr" },
-        { tag: "markdown", content: `_${footer}_` },
+        ...(options.expectedOutput
+          ? [
+              { tag: 'hr' },
+              {
+                tag: 'markdown',
+                content: `**期望产出**\n${escapeFeishuMarkdown(options.expectedOutput)}`,
+              },
+            ]
+          : []),
+        { tag: 'hr' },
+        { tag: 'markdown', content: `_${footer}_` },
       ],
     },
   };

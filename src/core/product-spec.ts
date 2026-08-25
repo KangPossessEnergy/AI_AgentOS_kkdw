@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { CollaborationMessage } from "./collaboration";
 
 const WorkspaceDocumentPathSchema = z
   .string()
@@ -47,6 +48,14 @@ export type LocalProductSpecRequest = z.infer<
   typeof LocalProductSpecRequestSchema
 >;
 
+export interface CollaborationOrigin {
+  taskId: string;
+  fromBotId: string;
+  reportToBotId: string;
+  round: number;
+  maxRounds: number;
+}
+
 export interface ProductSpecFlow {
   token: string;
   taskId: string; // 把方案绑定到飞书话题对应的产品任务，
@@ -54,6 +63,7 @@ export interface ProductSpecFlow {
   sessionId: string;
   ownerOpenId: string; // 用来验证操作者。
   ownerUnionId?: string; // 用来验证操作者。
+  collaboration?: CollaborationOrigin;
   request: ProductSpecRequest;
   status: "pending" | "approved" | "expired";
   approvedAt?: string;
@@ -65,7 +75,20 @@ export interface CreateProductSpecFlowOptions {
   sessionId: string;
   ownerOpenId: string;
   ownerUnionId?: string;
+  collaboration?: CollaborationOrigin;
   request: ProductSpecRequest;
+}
+
+export function collaborationOrigin(
+  message: CollaborationMessage,
+): CollaborationOrigin {
+  return {
+    taskId: message.taskId,
+    fromBotId: message.fromBotId,
+    reportToBotId: message.reportToBotId,
+    round: message.round,
+    maxRounds: message.maxRounds,
+  };
 }
 
 export function findProductSpecRequest(

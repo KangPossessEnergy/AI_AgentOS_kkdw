@@ -31,6 +31,7 @@ export async function continueClarificationFlow(options: {
   config: BotConfig;
   flow: ClarificationFlow;
   run: AbortController;
+  defaultDeliveryMode: "local" | "lark-doc";
 }): Promise<void> {
   const { bot, config, flow, run, runtime } = options;
   const session = runtime.sessions.get(flow.sessionId);

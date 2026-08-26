@@ -1,5 +1,4 @@
-/* 一个话题对应一项任务 */
-import { createHash } from "node:crypto";
+import { createHash } from 'node:crypto';
 
 export interface TopicAddress {
   messageId: string;
@@ -13,8 +12,8 @@ export function topicIdOf(message: TopicAddress): string {
 }
 
 export function topicTaskId(message: TopicAddress): string {
-  return createHash("sha256")
+  return createHash('sha256')
     .update(`${message.chatId}:${topicIdOf(message)}`)
-    .digest("hex")
+    .digest('hex')
     .slice(0, 24);
 }

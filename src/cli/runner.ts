@@ -1,14 +1,13 @@
-import { killCli, spawnCli } from "./spawn-cli.js";
-import { promptInputForPlatform } from "./types.js";
-import { createInterface } from "node:readline";
-import type { CliAdapter, CliEvent, CliRunResult } from "./types.js";
+import { killCli, spawnCli } from './spawn-cli.js';
+import { promptInputForPlatform } from './types.js';
+import { createInterface } from 'node:readline';
+import type { CliAdapter, CliEvent, CliRunResult } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 function envTimeoutMs(adapter: CliAdapter): number | undefined {
-  const raw =
-    process.env[`${adapter.id.toUpperCase()}_TIMEOUT_MS`] ??
-    process.env.CLI_TIMEOUT_MS;
+  const raw = process.env[`${adapter.id.toUpperCase()}_TIMEOUT_MS`]
+    ?? process.env.CLI_TIMEOUT_MS;
   if (!raw) return undefined;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
@@ -36,7 +35,7 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
   } = options;
   // Windows 下 prompt 走 stdin（规避 cmd 转义/乱码），其他平台直接作为命令行参数。
   const promptInput = promptInputForPlatform(process.platform);
-  const useStdin = promptInput === "stdin";
+  const useStdin = promptInput === 'stdin';
   const args = sessionId
     ? adapter.buildResumeArgs(prompt, sessionId, promptInput)
     : adapter.buildArgs(prompt, promptInput);
@@ -46,27 +45,27 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     const child = spawnCli(adapter.command, args, {
       cwd,
       signal,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     // stdin 模式下把 prompt 写入子进程；否则 prompt 已在命令行参数里，stdin 直接收口。
     if (child.stdin) {
-      if (useStdin) child.stdin.end(prompt, "utf8");
+      if (useStdin) child.stdin.end(prompt, 'utf8');
       else child.stdin.end();
     }
     // spawn 的 signal 选项只杀直接子进程（cmd 外壳），Windows 下 claude.exe/codex.exe 会变孤儿；
     // 额外监听 abort 用 killCli 连进程树一起清。
-    signal?.addEventListener("abort", () => killCli(child), { once: true });
+    signal?.addEventListener('abort', () => killCli(child), { once: true });
     const lines = createInterface({ input: child.stdout });
     let observedSessionId = sessionId;
     let observedAnswer: string | undefined;
-    let observedStats: CliRunResult["stats"];
+    let observedStats: CliRunResult['stats'];
     const observedToolCalls = new Map<
       string,
-      NonNullable<CliRunResult["toolCalls"]>[number]
+      NonNullable<CliRunResult['toolCalls']>[number]
     >();
     let finalResult: CliRunResult | undefined;
     let resultError: Error | undefined;
-    let stderr = "";
+    let stderr = '';
     let settled = false;
     let timedOut = false;
 
@@ -83,25 +82,25 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
       reject(error);
     };
 
-    lines.on("line", (line) => {
+    lines.on('line', (line) => {
       for (const event of adapter.parseEvents(line)) {
         onEvent?.(event);
-        if ("sessionId" in event && event.sessionId) {
+        if ('sessionId' in event && event.sessionId) {
           observedSessionId = event.sessionId;
         }
-        if (event.type === "error") {
+        if (event.type === 'error') {
           resultError = new Error(event.message);
           continue;
         }
-        if (event.type === "tool_call") {
+        if (event.type === 'tool_call') {
           observedToolCalls.set(event.toolUseId, event);
           continue;
         }
-        if (event.type === "tool_end" && event.failed) {
+        if (event.type === 'tool_end' && event.failed) {
           observedToolCalls.delete(event.toolUseId);
           continue;
         }
-        if (event.type === "result") {
+        if (event.type === 'result') {
           if (event.answer) observedAnswer = event.answer;
           if (event.stats) observedStats = event.stats;
           if (!observedAnswer) continue;
@@ -114,10 +113,10 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
       }
     });
 
-    child.stderr.on("data", (chunk: Buffer | string) => {
+    child.stderr.on('data', (chunk: Buffer | string) => {
       stderr += chunk.toString();
     });
-    child.once("error", (error) => {
+    child.once('error', (error) => {
       if (timedOut) {
         fail(new Error(`${adapter.displayName} 执行超时`));
         return;
@@ -128,7 +127,7 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
       }
       fail(error);
     });
-    child.once("close", (code) => {
+    child.once('close', (code) => {
       if (settled) return;
       if (timedOut) {
         return fail(new Error(`${adapter.displayName} 执行超时`));
@@ -138,11 +137,9 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
       }
       if (resultError) return fail(resultError);
       if (code !== 0) {
-        return fail(
-          new Error(
-            stderr.trim() || `${adapter.displayName} 退出，状态码 ${code}`,
-          ),
-        );
+        return fail(new Error(
+          stderr.trim() || `${adapter.displayName} 退出，状态码 ${code}`,
+        ));
       }
       if (!finalResult) {
         return fail(new Error(`${adapter.displayName} 没有返回最终结果`));

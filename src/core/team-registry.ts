@@ -1,12 +1,7 @@
-/**
- * TeamRegistry 承担三项工作：
- * 按 ID 查成员、为当前成员生成团队上下文、检查配置中的项目 Skill 是否真的存在。
- * 它不负责派发任务，所以不会把上一章的协作机制重新实现一遍。
- */
-import { access } from "node:fs/promises";
-import { join } from "node:path";
-import { homedir } from "node:os";
-import type { BotConfig } from "./bot-registry.js";
+import { access } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import type { BotConfig } from './bot-registry.js';
 
 export interface MissingSkill {
   botId: string;
@@ -38,26 +33,24 @@ export class TeamRegistry {
   get(botId: string): BotConfig | undefined {
     return this.configs.get(botId);
   }
-  // 会告诉执行引擎，团队成员是飞书中长期存在的 bot。
-  // Claude Code 和 Codex 自己的 Sub Agent 适合临时搜索、代码审查、测试和并行小任务。
+
   contextFor(currentBotId: string): string {
     const current = this.configs.get(currentBotId);
     if (!current) throw new Error(`团队成员不存在: ${currentBotId}`);
     const roster = this.members.map((member) => {
-      const leader = member.id === this.leaderBotId ? "（Team Leader）" : "";
-      const skills =
-        member.skills.length > 0
-          ? `；Skills：${member.skills.map((skill) => `$${skill}`).join("、")}`
-          : "";
+      const leader = member.id === this.leaderBotId ? '（Team Leader）' : '';
+      const skills = member.skills.length > 0
+        ? `；Skills：${member.skills.map((skill) => `$${skill}`).join('、')}`
+        : '';
       return `- ${member.id}${leader}：${member.role}${skills}`;
     });
     return [
-      "你所在的 Agent 团队：",
+      '你所在的 Agent 团队：',
       ...roster,
       `你当前以 ${current.id} 的身份工作。只处理交给你的职责；需要其他成员参与时，清楚说明希望交给谁以及期望结果。`,
-      "团队名单中的成员都是真实的飞书 bot。CLI 内部子 Agent 适合处理临时分工，不能冒充这些长期团队成员。",
-      "需要把任务交给其他成员时，使用 dispatch_task 工具，由 Agent OS 发送协作卡片并真正 @ 对方。只有 CEO 助理可以在运行时调用该工具；targetBotId 必须来自上面的团队名单，不能填写自己。",
-    ].join("\n");
+      '团队名单中的成员都是真实的飞书 bot。CLI 内部子 Agent 适合处理临时分工，不能冒充这些长期团队成员。',
+      '需要把任务交给其他成员时，使用 dispatch_task 工具，由 Agent OS 发送协作卡片并真正 @ 对方。只有 CEO 助理可以在运行时调用该工具；targetBotId 必须来自上面的团队名单，不能填写自己。',
+    ].join('\n');
   }
 
   async findMissingSkills(): Promise<MissingSkill[]> {
@@ -65,11 +58,11 @@ export class TeamRegistry {
     for (const config of this.members) {
       for (const skill of config.skills) {
         const searchedPaths = [
-          join(config.workspaceDir, ".agents", "skills", skill, "SKILL.md"),
-          join(config.workspaceDir, ".claude", "skills", skill, "SKILL.md"),
-          join(homedir(), ".agents", "skills", skill, "SKILL.md"),
-          join(homedir(), ".claude", "skills", skill, "SKILL.md"),
-          join(homedir(), ".codex", "skills", skill, "SKILL.md"),
+          join(config.workspaceDir, '.agents', 'skills', skill, 'SKILL.md'),
+          join(config.workspaceDir, '.claude', 'skills', skill, 'SKILL.md'),
+          join(homedir(), '.agents', 'skills', skill, 'SKILL.md'),
+          join(homedir(), '.claude', 'skills', skill, 'SKILL.md'),
+          join(homedir(), '.codex', 'skills', skill, 'SKILL.md'),
         ];
         if (!(await somePathExists(searchedPaths))) {
           missing.push({ botId: config.id, skill, searchedPaths });

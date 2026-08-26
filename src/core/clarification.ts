@@ -1,27 +1,39 @@
-/*
-
- 参考数据结构
-  {
-  "title": "确认用户详情需求",
-  "intro": "以下选择会影响页面入口和验收范围。",
-  "questions": [
-    {
-      "id": "entry",
-      "prompt": "从哪里进入用户详情？",
-      "recommendedOptionId": "name",
-      "options": [
-        { "id": "name", "label": "点击列表姓名" },
-        { "id": "menu", "label": "从操作菜单进入" }
-      ]
-    }
-  ]
- }
-
- */
-
-import { z } from "zod";
 import { randomUUID } from 'node:crypto';
-import { CollaborationOrigin } from "./product-spec";
+import { z } from 'zod';
+import type { CollaborationOrigin } from './collaboration.js';
+
+const OptionSchema = z.object({
+  id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+  label: z.string().trim().min(1).max(100),
+});
+
+const QuestionSchema = z.object({
+  id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+  prompt: z.string().trim().min(1).max(300),
+  options: z.array(OptionSchema).min(2).max(4),
+  recommendedOptionId: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(),
+}).superRefine((question, ctx) => {
+  const optionIds = question.options.map((option) => option.id);
+  if (new Set(optionIds).size !== optionIds.length) {
+    ctx.addIssue({ code: 'custom', message: '同一道问题的选项 ID 不能重复', path: ['options'] });
+  }
+  if (question.recommendedOptionId && !optionIds.includes(question.recommendedOptionId)) {
+    ctx.addIssue({ code: 'custom', message: '推荐项必须指向当前问题中的选项', path: ['recommendedOptionId'] });
+  }
+});
+
+export const ClarificationRequestSchema = z.object({
+  title: z.string().trim().min(1).max(80).default('需求澄清'),
+  intro: z.string().trim().max(300).optional().default(''),
+  questions: z.array(QuestionSchema).min(1).max(5),
+}).superRefine((request, ctx) => {
+  const questionIds = request.questions.map((question) => question.id);
+  if (new Set(questionIds).size !== questionIds.length) {
+    ctx.addIssue({ code: 'custom', message: '同一份澄清请求的问题 ID 不能重复', path: ['questions'] });
+  }
+});
+
+export type ClarificationRequest = z.infer<typeof ClarificationRequestSchema>;
 
 export interface ClarificationAnswer {
   questionId: string;
@@ -31,22 +43,7 @@ export interface ClarificationAnswer {
 }
 
 export interface ClarificationFlow {
-  token: string;// 标识当前卡片
-  taskId: string; //绑定飞书话题
-  botId: string;
-  sessionId: string; //指向 Agent OS 会话
-  ownerOpenId: string; //用来限制答题人
-  ownerUnionId?: string; //用来限制答题人
-  collaboration?: CollaborationOrigin;
-  originalMessageId: string;
-  cardMessageId?: string;
-  replyInThread: boolean;
-  request: ClarificationRequest;
-  currentIndex: number; //保存答题进度。
-  answers: ClarificationAnswer[]; //保存答题进度。
-}
-
- export interface CreateClarificationFlowOptions {
+  token: string;
   taskId: string;
   botId: string;
   sessionId: string;
@@ -57,70 +54,29 @@ export interface ClarificationFlow {
   cardMessageId?: string;
   replyInThread: boolean;
   request: ClarificationRequest;
- }
+  currentIndex: number;
+  answers: ClarificationAnswer[];
+}
 
-const OptionSchema = z.object({
-  id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
-  label: z.string().trim().min(1).max(100),
-});
+export interface CreateClarificationFlowOptions {
+  taskId: string;
+  botId: string;
+  sessionId: string;
+  ownerOpenId: string;
+  ownerUnionId?: string;
+  collaboration?: CollaborationOrigin;
+  originalMessageId: string;
+  cardMessageId?: string;
+  replyInThread: boolean;
+  request: ClarificationRequest;
+}
 
-const QuestionSchema = z
-  .object({
-    id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
-    prompt: z.string().trim().min(1).max(300),
-    options: z.array(OptionSchema).min(2).max(4),
-    recommendedOptionId: z
-      .string()
-      .regex(/^[a-z0-9_-]{1,32}$/)
-      .optional(),
-  })
-  .superRefine((question, ctx) => {
-    const optionIds = question.options.map((option) => option.id);
-    if (new Set(optionIds).size !== optionIds.length) {
-      ctx.addIssue({
-        code: "custom",
-        message: "同一道问题的选项 ID 不能重复",
-        path: ["options"],
-      });
-    }
-    if (
-      question.recommendedOptionId &&
-      !optionIds.includes(question.recommendedOptionId)
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "推荐项必须指向当前问题中的选项",
-        path: ["recommendedOptionId"],
-      });
-    }
-  });
-
-export const ClarificationRequestSchema = z
-  .object({
-    title: z.string().trim().min(1).max(80).default("需求澄清"),
-    intro: z.string().trim().max(300).optional().default(""),
-    questions: z.array(QuestionSchema).min(1).max(5),
-  })
-  .superRefine((request, ctx) => {
-    const questionIds = request.questions.map((question) => question.id);
-    if (new Set(questionIds).size !== questionIds.length) {
-      ctx.addIssue({
-        code: "custom",
-        message: "同一份澄清请求的问题 ID 不能重复",
-        path: ["questions"],
-      });
-    }
-  });
-
-export type ClarificationRequest = z.infer<typeof ClarificationRequestSchema>;
-
-// 可以从工具调用历史中提取出来最近的问题内容。
 export function findClarificationRequest(
   toolCalls: Array<{ toolName: string; input: unknown }> | undefined,
 ): ClarificationRequest | undefined {
   for (let index = (toolCalls?.length ?? 0) - 1; index >= 0; index -= 1) {
     const call = toolCalls?.[index];
-    if (call?.toolName !== "request_clarification") continue;
+    if (call?.toolName !== 'request_clarification') continue;
     const parsed = ClarificationRequestSchema.safeParse(call.input);
     if (parsed.success) return parsed.data;
   }
@@ -137,7 +93,7 @@ export function isClarificationOwner(
   return flow.ownerOpenId === operator.operatorOpenId;
 }
 
- export function formatClarificationAnswers(flow: ClarificationFlow): string {
+export function formatClarificationAnswers(flow: ClarificationFlow): string {
   const lines = flow.answers.map(
     (answer, index) => [
       `${index + 1}. ${answer.prompt}`,
@@ -151,27 +107,25 @@ export function isClarificationOwner(
     ...lines,
     '请基于这些答案继续工作。如果仍有会实质影响方案的未决问题，再次调用 request_clarification；否则直接整理清晰、可验收的产品结论。',
   ].join('\n\n');
- }
+}
 
- export function formatClarificationMessage(
+export function formatClarificationMessage(
   flow: ClarificationFlow,
   message: string,
- ): string {
-   const confirmed = flow.answers.length
+): string {
+  const confirmed = flow.answers.length
     ? formatClarificationAnswers(flow)
     : '此前还没有确认任何选项。';
-   const currentQuestion = flow.request.questions[flow.currentIndex];
-   return [
-     '用户没有继续点击上一张需求澄清卡片，而是在同一个飞书话题里补充了新的信息。旧卡片已经失效，这条消息仍属于同一个任务。',
-     confirmed,
-     currentQuestion ? `上一张卡片正在询问：${currentQuestion.prompt}` : '',
-     `用户的新消息：${message}`,
-     '请优先理解这条新消息对既有需求的修正。如果仍有关键歧义，重新调用 request_clarification；信息已经足够时，直接整理可验收的需求结论。',
-   ].filter(Boolean).join('\n\n');
- }
+  const currentQuestion = flow.request.questions[flow.currentIndex];
+  return [
+    '用户没有继续点击上一张需求澄清卡片，而是在同一个飞书话题里补充了新的信息。旧卡片已经失效，这条消息仍属于同一个任务。',
+    confirmed,
+    currentQuestion ? `上一张卡片正在询问：${currentQuestion.prompt}` : '',
+    `用户的新消息：${message}`,
+    '请优先理解这条新消息对既有需求的修正。如果仍有关键歧义，重新调用 request_clarification；信息已经足够时，直接整理可验收的需求结论。',
+  ].filter(Boolean).join('\n\n');
+}
 
- 
- //同一任务只保留一个当前流程
 export class ClarificationFlowStore {
   private readonly flows = new Map<string, ClarificationFlow>();
 
@@ -182,7 +136,7 @@ export class ClarificationFlowStore {
       }
     }
     const flow: ClarificationFlow = {
-      token: randomUUID().replaceAll("-", ""),
+      token: randomUUID().replaceAll('-', ''),
       ...options,
       currentIndex: 0,
       answers: [],
@@ -206,12 +160,11 @@ export class ClarificationFlowStore {
     this.flows.delete(token);
   }
 
-  // 记录用户的选择或自定义文本
   answer(
     token: string,
     questionId: string,
     answer: string,
-    source: ClarificationAnswer["source"] = "user",
+    source: ClarificationAnswer['source'] = 'user',
   ): { flow: ClarificationFlow; complete: boolean } | undefined {
     const flow = this.flows.get(token);
     const question = flow?.request.questions[flow.currentIndex];
@@ -232,8 +185,6 @@ export class ClarificationFlowStore {
     };
   }
 
-  // 对当前题或全部剩余题直接采用推荐项
-  // 每次成功回答都会推进 currentIndex，最后一题完成时返回 complete: true。
   answerWithRecommendation(
     token: string,
     allRemaining: boolean,
@@ -244,16 +195,15 @@ export class ClarificationFlowStore {
     do {
       const question = flow.request.questions[flow.currentIndex];
       if (!question) break;
-      const recommended =
-        question.options.find(
-          (option) => option.id === question.recommendedOptionId,
-        ) ?? question.options[0];
+      const recommended = question.options.find(
+        (option) => option.id === question.recommendedOptionId,
+      ) ?? question.options[0];
       if (!recommended) return undefined;
       const result = this.answer(
         token,
         question.id,
         recommended.label,
-        "agent",
+        'agent',
       );
       if (!result || result.complete || !allRemaining) return result;
     } while (flow.currentIndex < flow.request.questions.length);

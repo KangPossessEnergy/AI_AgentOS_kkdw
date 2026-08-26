@@ -1,4 +1,3 @@
-/* 先保证确认卡真实存在 */
 import type { ProductDeliveryMode } from '../core/bot-registry.js';
 import {
   findProductSpecRequest,

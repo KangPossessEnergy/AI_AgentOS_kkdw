@@ -1,21 +1,38 @@
 /**
  * 飞书任务卡片：把 CLI 事件整理成稳定、低噪音的任务进度。
  */
-import type { CliRunStats, CliSessionSummary } from "../cli/types.js";
-import type { ClarificationFlow } from "../core/clarification.js";
-import type { ProductSpecFlow } from "../core/product-spec.js";
-
-import type {
-  TaskActivity,
-  TaskProgressSnapshot,
-} from "../core/task-progress.js";
+import type { CliRunStats, CliSessionSummary } from '../cli/types.js';
+import type { ClarificationFlow } from '../core/clarification.js';
+import type { ProductSpecFlow } from '../core/product-spec.js';
+import type { TaskActivity, TaskProgressSnapshot } from '../core/task-progress.js';
 
 export type CardJson = Record<string, unknown>;
-export type TaskStatus = "running" | "success" | "failed" | "cancelled";
+export type TaskStatus = 'running' | 'success' | 'failed' | 'cancelled';
 
-export interface ClarificationCardOptions {
-  flow: ClarificationFlow;
+export interface TaskCardOptions {
+  title: string;
+  status: TaskStatus;
+  detail: string;
+  progress?: TaskProgressSnapshot;
+  answer?: string;
+  stats?: CliRunStats;
+  technicalDetail?: string;
+  abortSessionId?: string;
 }
+
+export interface ResumeCardOptions {
+  agentSessionId: string;
+  cliName: string;
+  currentCliSessionId?: string;
+  sessions: CliSessionSummary[];
+}
+
+export interface SessionNoticeCardOptions {
+  title: string;
+  detail: string;
+  template?: 'blue' | 'green' | 'grey';
+}
+
 export interface TeamCardMember {
   id: string;
   displayName: string;
@@ -28,28 +45,6 @@ export interface TeamCardMember {
 
 export interface TeamCardOptions {
   members: TeamCardMember[];
-}
-export interface ResumeCardOptions {
-  agentSessionId: string;
-  cliName: string;
-  currentCliSessionId?: string;
-  sessions: CliSessionSummary[];
-}
-
-export interface SessionNoticeCardOptions {
-  title: string;
-  detail: string;
-  template?: "blue" | "green" | "grey";
-}
-export interface TaskCardOptions {
-  title: string;
-  status: TaskStatus;
-  detail: string;
-  progress?: TaskProgressSnapshot;
-  answer?: string;
-  stats?: CliRunStats;
-  technicalDetail?: string;
-  abortSessionId?: string;
 }
 
 export interface CollaborationCardOptions {
@@ -64,11 +59,15 @@ export interface CollaborationCardOptions {
   maxRounds: number;
 }
 
+export interface ClarificationCardOptions {
+  flow: ClarificationFlow;
+}
+
 const STATUS_STYLE = {
-  running: { template: "blue", label: "执行中" },
-  success: { template: "green", label: "已完成" },
-  failed: { template: "red", label: "执行失败" },
-  cancelled: { template: "grey", label: "已取消" },
+  running: { template: 'blue', label: '执行中' },
+  success: { template: 'green', label: '已完成' },
+  failed: { template: 'red', label: '执行失败' },
+  cancelled: { template: 'grey', label: '已取消' },
 } as const;
 
 const COMPACT_ANSWER_LENGTH = 900;
@@ -77,17 +76,17 @@ const RUNNING_ACTIVITY_LIMIT = 3;
 const FINISHED_ACTIVITY_LIMIT = 8;
 
 const TOOL_ICONS: Record<string, string> = {
-  Agent: "🧩",
-  Bash: "⌘",
-  Edit: "✏️",
-  Glob: "📁",
-  Grep: "🔎",
-  Read: "📄",
-  Task: "🧩",
-  TaskOutput: "⏳",
-  WebFetch: "🌐",
-  WebSearch: "🔍",
-  Write: "📝",
+  Agent: '🧩',
+  Bash: '⌘',
+  Edit: '✏️',
+  Glob: '📁',
+  Grep: '🔎',
+  Read: '📄',
+  Task: '🧩',
+  TaskOutput: '⏳',
+  WebFetch: '🌐',
+  WebSearch: '🔍',
+  Write: '📝',
 };
 
 function formatDuration(durationMs: number): string {
@@ -104,30 +103,29 @@ function formatCount(value: number): string {
 }
 
 function escapeInlineCode(value: string): string {
-  return value.replaceAll("`", "ˋ");
+  return value.replaceAll('`', 'ˋ');
 }
 
 function escapeFeishuMarkdown(value: string): string {
-  return value.replace(/<(?=\/?[A-Za-z][^>]*>)/g, "<&zwj;");
+  return value.replace(/<(?=\/?[A-Za-z][^>]*>)/g, '<&zwj;');
 }
 
 function activityLine(activity: TaskActivity): string {
-  const icon = activity.failed ? "⚠️" : (TOOL_ICONS[activity.toolName] ?? "⚙️");
+  const icon = activity.failed ? '⚠️' : (TOOL_ICONS[activity.toolName] ?? '⚙️');
   const detail = activity.detail
     ? ` · \`${escapeInlineCode(activity.detail)}\``
-    : "";
-  const duration =
-    activity.durationMs >= 1_000
-      ? ` · ${formatDuration(activity.durationMs)}`
-      : "";
+    : '';
+  const duration = activity.durationMs >= 1_000
+    ? ` · ${formatDuration(activity.durationMs)}`
+    : '';
   return `${icon} ${activity.label}${detail}${duration}`;
 }
 
 function markdownSplitIndex(text: string, maxLength: number): number {
   if (text.length <= maxLength) return text.length;
-  const paragraph = text.lastIndexOf("\n\n", maxLength);
+  const paragraph = text.lastIndexOf('\n\n', maxLength);
   if (paragraph >= maxLength * 0.55) return paragraph;
-  const line = text.lastIndexOf("\n", maxLength);
+  const line = text.lastIndexOf('\n', maxLength);
   return line >= maxLength * 0.55 ? line : maxLength;
 }
 
@@ -137,20 +135,18 @@ function closeOpenFence(markdown: string): string {
 }
 
 function markdownPreview(text: string, maxLength: number): string {
-  return closeOpenFence(
-    text.slice(0, markdownSplitIndex(text, maxLength)).trim(),
-  );
+  return closeOpenFence(text.slice(0, markdownSplitIndex(text, maxLength)).trim());
 }
 
 function compactAnswerPreview(answer: string): string {
   const fenceIndex = answer.search(/\n```/);
   const prose = fenceIndex > 0 ? answer.slice(0, fenceIndex) : answer;
   const preview = markdownPreview(prose, COMPACT_ANSWER_LENGTH)
-    .replace(/\n(?:---|#{1,6}\s+[^\n]+)\s*$/, "")
+    .replace(/\n(?:---|#{1,6}\s+[^\n]+)\s*$/, '')
     .trim();
   return preview.length >= 40
     ? preview
-    : "回答包含较多代码与细节，展开后可以查看完整内容。";
+    : '回答包含较多代码与细节，展开后可以查看完整内容。';
 }
 
 function usageTotal(stats: CliRunStats | undefined): number | undefined {
@@ -162,9 +158,7 @@ function usageTotal(stats: CliRunStats | undefined): number | undefined {
     stats.cacheReadTokens,
     stats.cacheCreationTokens,
   ].filter((value): value is number => value !== undefined);
-  return values.length
-    ? values.reduce((sum, value) => sum + value, 0)
-    : undefined;
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : undefined;
 }
 
 function formatContextUsage(
@@ -187,27 +181,24 @@ function formatContextGrowth(
 ): string | undefined {
   if (usedTokens === undefined || startTokens === undefined) return undefined;
   const delta = usedTokens - startTokens;
-  const change =
-    delta >= 0
-      ? `新增 ${formatCount(delta)}`
-      : `减少 ${formatCount(Math.abs(delta))}`;
-  const startLabel = startedNewSession ? "新会话基础" : "本轮开始";
+  const change = delta >= 0
+    ? `新增 ${formatCount(delta)}`
+    : `减少 ${formatCount(Math.abs(delta))}`;
+  const startLabel = startedNewSession ? '新会话基础' : '本轮开始';
   return `${startLabel} ${formatCount(startTokens)} · ${change}`;
 }
 
-function buildRunningElements(
-  options: TaskCardOptions,
-): Record<string, unknown>[] {
+function buildRunningElements(options: TaskCardOptions): Record<string, unknown>[] {
   const progress = options.progress;
   const currentIcon = progress?.currentToolName
-    ? `${TOOL_ICONS[progress.currentToolName] ?? "⚙️"} `
-    : "";
+    ? `${TOOL_ICONS[progress.currentToolName] ?? '⚙️'} `
+    : '';
   const currentDetail = progress?.currentDetail
     ? `\n\`${escapeInlineCode(progress.currentDetail)}\``
-    : "";
+    : '';
   const meta = progress
     ? `${formatDuration(progress.elapsedMs)} · ${progress.toolCount} 次工具调用`
-    : "刚刚开始";
+    : '刚刚开始';
   const context = formatContextUsage(
     progress?.contextUsedTokens,
     progress?.contextWindowTokens,
@@ -217,43 +208,37 @@ function buildRunningElements(
     progress?.contextStartTokens,
     progress?.startedNewSession,
   );
-  const elements: Record<string, unknown>[] = [
-    {
-      tag: "markdown",
-      content: `**${currentIcon}${progress?.current ?? options.detail}**${currentDetail}\n\n${meta}${context ? `\n_${context}_` : ""}${contextGrowth ? `\n_${contextGrowth}_` : ""}`,
-    },
-  ];
+  const elements: Record<string, unknown>[] = [{
+    tag: 'markdown',
+    content: `**${currentIcon}${progress?.current ?? options.detail}**${currentDetail}\n\n${meta}${context ? `\n_${context}_` : ''}${contextGrowth ? `\n_${contextGrowth}_` : ''}`,
+  }];
   if (progress?.activities.length) {
     const visible = progress.activities.slice(0, RUNNING_ACTIVITY_LIMIT);
     elements.push({
-      tag: "markdown",
-      content: `**最近完成（${visible.length} / ${progress.completedCount}）**\n${visible.map(activityLine).join("\n")}`,
+      tag: 'markdown',
+      content: `**最近完成（${visible.length} / ${progress.completedCount}）**\n${visible.map(activityLine).join('\n')}`,
     });
   }
   if (options.abortSessionId) {
     elements.push({
-      tag: "button",
-      text: { tag: "plain_text", content: "停止任务" },
-      type: "danger",
-      width: "default",
-      size: "medium",
-      behaviors: [
-        {
-          type: "callback",
-          value: {
-            action: "abort_task",
-            sessionId: options.abortSessionId,
-          },
+      tag: 'button',
+      text: { tag: 'plain_text', content: '停止任务' },
+      type: 'danger',
+      width: 'default',
+      size: 'medium',
+      behaviors: [{
+        type: 'callback',
+        value: {
+          action: 'abort_task',
+          sessionId: options.abortSessionId,
         },
-      ],
+      }],
     });
   }
   return elements;
 }
 
-function buildFinishedElements(
-  options: TaskCardOptions,
-): Record<string, unknown>[] {
+function buildFinishedElements(options: TaskCardOptions): Record<string, unknown>[] {
   const progress = options.progress;
   const durationMs = options.stats?.durationMs ?? progress?.elapsedMs;
   const totalTokens = usageTotal(options.stats);
@@ -267,95 +252,80 @@ function buildFinishedElements(
     progress?.startedNewSession,
   );
   const executionMeta = [
-    durationMs !== undefined
-      ? `**耗时** ${formatDuration(durationMs)}`
-      : undefined,
+    durationMs !== undefined ? `**耗时** ${formatDuration(durationMs)}` : undefined,
     progress ? `**工具调用** ${progress.toolCount} 次` : undefined,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  ].filter(Boolean).join(' · ');
   const usageMeta = [
     totalTokens !== undefined
       ? `**累计消耗** ${formatCount(totalTokens)} tokens`
       : undefined,
     context
-      ? `**当前上下文** ${context.replace(/^当前上下文(?:约)?\s+/, "")}`
+      ? `**当前上下文** ${context.replace(/^当前上下文(?:约)?\s+/, '')}`
       : undefined,
     contextGrowth ? `**本轮变化** ${contextGrowth}` : undefined,
-  ]
-    .filter(Boolean)
-    .join("\n");
-  const meta = [executionMeta, usageMeta].filter(Boolean).join("\n\n");
+  ].filter(Boolean).join('\n');
+  const meta = [executionMeta, usageMeta].filter(Boolean).join('\n\n');
   const elements: Record<string, unknown>[] = [];
 
-  if (options.status === "success") {
+  if (options.status === 'success') {
     const answer = options.answer || options.detail;
     if (answer.length <= COMPACT_ANSWER_LENGTH) {
-      elements.push({ tag: "markdown", content: escapeFeishuMarkdown(answer) });
+      elements.push({ tag: 'markdown', content: escapeFeishuMarkdown(answer) });
     } else {
       elements.push({
-        tag: "markdown",
+        tag: 'markdown',
         content: `${escapeFeishuMarkdown(compactAnswerPreview(answer))}\n\n_完整回答已收起_`,
       });
       elements.push({
-        tag: "collapsible_panel",
+        tag: 'collapsible_panel',
         expanded: false,
-        header: collapsibleHeader("查看完整回答"),
-        vertical_spacing: "8px",
-        padding: "8px 8px 8px 8px",
-        elements: [
-          {
-            tag: "markdown",
-            content: escapeFeishuMarkdown(
-              markdownPreview(answer, MAX_CARD_ANSWER_LENGTH),
-            ),
-          },
-        ],
+        header: collapsibleHeader('查看完整回答'),
+        vertical_spacing: '8px',
+        padding: '8px 8px 8px 8px',
+        elements: [{
+          tag: 'markdown',
+          content: escapeFeishuMarkdown(markdownPreview(answer, MAX_CARD_ANSWER_LENGTH)),
+        }],
       });
     }
     if (answerNeedsContinuation(answer)) {
       elements.push({
-        tag: "markdown",
-        content: "_回答较长，剩余内容已继续发送。_",
+        tag: 'markdown',
+        content: '_回答较长，剩余内容已继续发送。_',
       });
     }
   } else {
-    elements.push({ tag: "markdown", content: `**${options.detail}**` });
+    elements.push({ tag: 'markdown', content: `**${options.detail}**` });
     if (options.technicalDetail) {
       elements.push({
-        tag: "collapsible_panel",
+        tag: 'collapsible_panel',
         expanded: false,
-        header: collapsibleHeader("查看错误详情"),
-        vertical_spacing: "8px",
-        padding: "8px 8px 8px 8px",
-        elements: [
-          {
-            tag: "markdown",
-            content: `\`${escapeInlineCode(options.technicalDetail)}\``,
-          },
-        ],
+        header: collapsibleHeader('查看错误详情'),
+        vertical_spacing: '8px',
+        padding: '8px 8px 8px 8px',
+        elements: [{
+          tag: 'markdown',
+          content: `\`${escapeInlineCode(options.technicalDetail)}\``,
+        }],
       });
     }
   }
 
   if (meta || progress?.activities.length) {
-    const visible =
-      progress?.activities.slice(0, FINISHED_ACTIVITY_LIMIT) ?? [];
+    const visible = progress?.activities.slice(0, FINISHED_ACTIVITY_LIMIT) ?? [];
     const activityText = visible.length
-      ? `\n\n**最近执行轨迹**\n${visible.map(activityLine).join("\n")}`
-      : "";
+      ? `\n\n**最近执行轨迹**\n${visible.map(activityLine).join('\n')}`
+      : '';
     elements.push({
-      tag: "collapsible_panel",
+      tag: 'collapsible_panel',
       expanded: false,
-      header: collapsibleHeader("执行详情"),
-      vertical_spacing: "8px",
-      padding: "8px 8px 8px 8px",
-      elements: [
-        {
-          tag: "markdown",
-          content: `${meta || options.detail}${activityText}`,
-        },
-      ],
+      header: collapsibleHeader('执行详情'),
+      vertical_spacing: '8px',
+      padding: '8px 8px 8px 8px',
+      elements: [{
+        tag: 'markdown',
+        content: `${meta || options.detail}${activityText}`,
+      }],
     });
   }
   return elements;
@@ -363,14 +333,14 @@ function buildFinishedElements(
 
 function collapsibleHeader(content: string): Record<string, unknown> {
   return {
-    title: { tag: "plain_text", content },
-    vertical_align: "center",
+    title: { tag: 'plain_text', content },
+    vertical_align: 'center',
     icon: {
-      tag: "standard_icon",
-      token: "down-small-ccm_outlined",
-      size: "16px 16px",
+      tag: 'standard_icon',
+      token: 'down-small-ccm_outlined',
+      size: '16px 16px',
     },
-    icon_position: "right",
+    icon_position: 'right',
     icon_expanded_angle: -180,
   };
 }
@@ -378,118 +348,249 @@ function collapsibleHeader(content: string): Record<string, unknown> {
 export function buildTaskCard(options: TaskCardOptions): CardJson {
   const style = STATUS_STYLE[options.status];
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       update_multi: true,
       summary: { content: `${options.title}：${style.label}` },
     },
     header: {
       template: style.template,
-      title: {
-        tag: "plain_text",
-        content: `${options.title} · ${style.label}`,
-      },
+      title: { tag: 'plain_text', content: `${options.title} · ${style.label}` },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
-      elements:
-        options.status === "running"
-          ? buildRunningElements(options)
-          : buildFinishedElements(options),
+      direction: 'vertical',
+      vertical_spacing: '12px',
+      elements: options.status === 'running'
+        ? buildRunningElements(options)
+        : buildFinishedElements(options),
     },
   };
 }
 
-export function answerNeedsContinuation(answer: string): boolean {
-  return answer.length > MAX_CARD_ANSWER_LENGTH;
+function clarificationButton(
+  flow: ClarificationFlow,
+  option: { id: string; label: string },
+): Record<string, unknown> {
+  const question = flow.request.questions[flow.currentIndex];
+  const recommendedOptionId = question.recommendedOptionId
+    ?? question.options[0]?.id;
+  return {
+    tag: 'button',
+    text: {
+      tag: 'plain_text',
+      content: option.id === recommendedOptionId
+        ? option.label.includes('推荐') ? option.label : `${option.label}（推荐）`
+        : option.label,
+    },
+    type: 'default',
+    width: 'fill',
+    size: 'medium',
+    behaviors: [{
+      type: 'callback',
+      value: {
+        action: 'answer_clarification',
+        flowToken: flow.token,
+        questionId: question.id,
+        optionId: option.id,
+      },
+    }],
+  };
 }
 
-export function answerContinuation(answer: string): string {
-  return answer.slice(markdownSplitIndex(answer, MAX_CARD_ANSWER_LENGTH));
+function clarificationAnswerSummary(flow: ClarificationFlow): string {
+  return flow.answers.map((answer, index) => [
+    `${index + 1}. **${escapeFeishuMarkdown(answer.prompt)}**`,
+    `${answer.source === 'agent' ? 'Agent 推荐' : '你的选择'}：${escapeFeishuMarkdown(answer.answer)}`,
+  ].join('\n')).join('\n\n');
 }
 
-export function splitLongText(text: string, maxLength = 4_000): string[] {
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > maxLength) {
-    const newline = remaining.lastIndexOf("\n", maxLength);
-    const splitAt = newline > maxLength / 2 ? newline : maxLength;
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
-  }
-  if (remaining) chunks.push(remaining);
-  return chunks;
+function clarificationDecisionButton(
+  flow: ClarificationFlow,
+  decisionMode: 'current' | 'remaining',
+): Record<string, unknown> {
+  const question = flow.request.questions[flow.currentIndex];
+  return {
+    tag: 'button',
+    text: {
+      tag: 'plain_text',
+      content: decisionMode === 'current'
+        ? '这一题交给 Agent 决定'
+        : '按推荐方案继续',
+    },
+    type: decisionMode === 'remaining' ? 'primary' : 'default',
+    width: 'fill',
+    size: 'medium',
+    behaviors: [{
+      type: 'callback',
+      value: {
+        action: 'answer_clarification',
+        flowToken: flow.token,
+        questionId: question.id,
+        decisionMode,
+      },
+    }],
+  };
 }
 
-type UpdateCard = (card: CardJson) => Promise<void>;
+export function buildClarificationCard(
+  options: ClarificationCardOptions,
+): CardJson {
+  const { flow } = options;
+  const question = flow.request.questions[flow.currentIndex];
+  const current = flow.currentIndex + 1;
+  const total = flow.request.questions.length;
 
-/** 一秒窗口内无论 push 多少次，只提交最新的一张卡片。 */
-export class ThrottledCardUpdater {
-  private pendingCard: CardJson | undefined;
-  private timer: ReturnType<typeof setTimeout> | undefined;
-  private updateChain: Promise<void> = Promise.resolve();
-  private closed = false;
+  return {
+    schema: '2.0',
+    config: {
+      update_multi: true,
+      summary: { content: `${flow.request.title}（${current}/${total}）` },
+    },
+    header: {
+      template: 'blue',
+      title: { tag: 'plain_text', content: flow.request.title },
+      subtitle: { tag: 'plain_text', content: `${current} / ${total}` },
+    },
+    body: {
+      direction: 'vertical',
+      vertical_spacing: '12px',
+      elements: [
+        ...(flow.request.intro && flow.currentIndex === 0
+          ? [{
+            tag: 'markdown',
+            content: escapeFeishuMarkdown(flow.request.intro),
+          }]
+          : []),
+        ...(flow.answers.length
+          ? [
+            {
+              tag: 'markdown',
+              content: `**已确认 ${flow.answers.length} 项**\n\n${clarificationAnswerSummary(flow)}`,
+            },
+            { tag: 'hr' },
+          ]
+          : []),
+        {
+          tag: 'markdown',
+          content: `**${escapeFeishuMarkdown(question.prompt)}**\n\n选择最符合预期的一项：`,
+        },
+        ...question.options.map((option) => clarificationButton(flow, option)),
+        clarificationDecisionButton(flow, 'current'),
+        { tag: 'hr' },
+        {
+          tag: 'form',
+          name: `clarify_${flow.token.slice(0, 8)}`,
+          vertical_spacing: '8px',
+          elements: [
+            {
+              tag: 'input',
+              name: 'custom_answer',
+              placeholder: {
+                tag: 'plain_text',
+                content: '都不合适？在这里写下你的答案',
+              },
+              max_length: 500,
+            },
+            {
+              tag: 'button',
+              name: 'submit_custom',
+              action_type: 'form_submit',
+              text: { tag: 'plain_text', content: '提交自定义答案' },
+              type: 'primary',
+              width: 'default',
+              size: 'medium',
+              value: {
+                action: 'answer_clarification',
+                flowToken: flow.token,
+                questionId: question.id,
+                custom: true,
+              },
+            },
+          ],
+        },
+        { tag: 'hr' },
+        {
+          tag: 'markdown',
+          content: '不想逐项选择？Agent 会保留你已经确认的答案，并为剩余问题采用推荐方案。',
+        },
+        clarificationDecisionButton(flow, 'remaining'),
+      ],
+    },
+  };
+}
 
-  constructor(
-    private readonly updateCard: UpdateCard,
-    private readonly intervalMs = 1_000,
-  ) {}
+export function buildClarificationContinuingCard(
+  flow: ClarificationFlow,
+): CardJson {
+  return {
+    schema: '2.0',
+    config: {
+      update_multi: true,
+      summary: { content: `${flow.request.title}：正在整理` },
+    },
+    header: {
+      template: 'blue',
+      title: {
+        tag: 'plain_text',
+        content: `${flow.request.title} · 正在整理`,
+      },
+    },
+    body: {
+      direction: 'vertical',
+      vertical_spacing: '12px',
+      elements: [{
+        tag: 'markdown',
+        content: [
+          '**答案已收到**',
+          '正在基于这些选择整理产品说明，无需重复点击。',
+          `**已确认 ${flow.answers.length} 项**\n\n${clarificationAnswerSummary(flow)}`,
+        ].join('\n\n'),
+      }],
+    },
+  };
+}
 
-  push(card: CardJson): void {
-    if (this.closed) return;
-    this.pendingCard = card;
-    this.schedule();
-  }
-
-  async finish(finalCard: CardJson): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = undefined;
-    this.pendingCard = undefined;
-    await this.updateChain.catch(() => undefined);
-    await this.updateCard(finalCard);
-  }
-
-  async cancel(): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = undefined;
-    this.pendingCard = undefined;
-    await this.updateChain.catch(() => undefined);
-  }
-
-  private schedule(): void {
-    if (this.timer) return;
-    this.timer = setTimeout(() => {
-      this.timer = undefined;
-      this.flushPending();
-    }, this.intervalMs);
-  }
-
-  private flushPending(): void {
-    const card = this.pendingCard;
-    this.pendingCard = undefined;
-    if (!card || this.closed) return;
-
-    this.updateChain = this.updateChain
-      .then(() => this.updateCard(card))
-      .finally(() => {
-        if (this.pendingCard && !this.closed) this.schedule();
-      });
-  }
+export function buildClarificationSupersededCard(
+  flow: ClarificationFlow,
+): CardJson {
+  return {
+    schema: '2.0',
+    config: {
+      update_multi: true,
+      summary: { content: `${flow.request.title}：已收到新的补充` },
+    },
+    header: {
+      template: 'grey',
+      title: {
+        tag: 'plain_text',
+        content: `${flow.request.title} · 已更新`,
+      },
+    },
+    body: {
+      direction: 'vertical',
+      vertical_spacing: '12px',
+      elements: [{
+        tag: 'markdown',
+        content: [
+          '**已收到你在话题里的新消息**',
+          '这张卡片已经失效，Agent OS 正在沿用同一个任务上下文处理新的补充。',
+          flow.answers.length
+            ? `此前已确认 ${flow.answers.length} 项，相关答案会一并带入。`
+            : '',
+        ].filter(Boolean).join('\n\n'),
+      }],
+    },
+  };
 }
 
 function formatSessionTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
     hour12: false,
   }).format(date);
 }
@@ -497,81 +598,67 @@ function formatSessionTime(value: string): string {
 export function buildResumeCard(options: ResumeCardOptions): CardJson {
   const elements: Record<string, unknown>[] = options.sessions.length
     ? options.sessions.flatMap((session, index) => {
-        const current = session.id === options.currentCliSessionId;
-        const row: Record<string, unknown> = {
-          tag: "column_set",
-          flex_mode: "none",
-          horizontal_spacing: "12px",
-          columns: [
-            {
-              tag: "column",
-              width: "weighted",
-              weight: 4,
-              elements: [
-                {
-                  tag: "markdown",
-                  content: `**${escapeFeishuMarkdown(session.title)}**\n_${formatSessionTime(session.updatedAt)} · ${session.id.slice(0, 8)}_`,
-                },
-              ],
-            },
-            {
-              tag: "column",
-              width: "auto",
-              vertical_align: "center",
-              elements: current
-                ? [{ tag: "markdown", content: "**当前会话**" }]
-                : [
-                    {
-                      tag: "button",
-                      text: { tag: "plain_text", content: "恢复" },
-                      type: "primary_filled",
-                      size: "medium",
-                      behaviors: [
-                        {
-                          type: "callback",
-                          value: {
-                            action: "resume_cli_session",
-                            agentSessionId: options.agentSessionId,
-                            cliSessionId: session.id,
-                          },
-                        },
-                      ],
-                    },
-                  ],
-            },
-          ],
-        };
-        return index === options.sessions.length - 1
-          ? [row]
-          : [row, { tag: "hr" }];
-      })
-    : [
-        {
-          tag: "markdown",
-          content:
-            "当前工作目录里还没有可以恢复的 CLI 会话。先完成一次任务，再用 `/new` 开启新会话。",
-        },
-      ];
+      const current = session.id === options.currentCliSessionId;
+      const row: Record<string, unknown> = {
+        tag: 'column_set',
+        flex_mode: 'none',
+        horizontal_spacing: '12px',
+        columns: [
+          {
+            tag: 'column',
+            width: 'weighted',
+            weight: 4,
+            elements: [{
+              tag: 'markdown',
+              content: `**${escapeFeishuMarkdown(session.title)}**\n_${formatSessionTime(session.updatedAt)} · ${session.id.slice(0, 8)}_`,
+            }],
+          },
+          {
+            tag: 'column',
+            width: 'auto',
+            vertical_align: 'center',
+            elements: current
+              ? [{ tag: 'markdown', content: '**当前会话**' }]
+              : [{
+                tag: 'button',
+                text: { tag: 'plain_text', content: '恢复' },
+                type: 'primary_filled',
+                size: 'medium',
+                behaviors: [{
+                  type: 'callback',
+                  value: {
+                    action: 'resume_cli_session',
+                    agentSessionId: options.agentSessionId,
+                    cliSessionId: session.id,
+                  },
+                }],
+              }],
+          },
+        ],
+      };
+      return index === options.sessions.length - 1 ? [row] : [row, { tag: 'hr' }];
+    })
+    : [{
+      tag: 'markdown',
+      content: '当前工作目录里还没有可以恢复的 CLI 会话。先完成一次任务，再用 `/new` 开启新会话。',
+    }];
 
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       update_multi: true,
       summary: { content: `${options.cliName}：选择历史会话` },
     },
     header: {
-      template: "blue",
-      title: { tag: "plain_text", content: "恢复历史会话" },
-      subtitle: { tag: "plain_text", content: options.cliName },
+      template: 'blue',
+      title: { tag: 'plain_text', content: '恢复历史会话' },
+      subtitle: { tag: 'plain_text', content: options.cliName },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
+      direction: 'vertical',
+      vertical_spacing: '12px',
       elements: [
-        {
-          tag: "markdown",
-          content: "选择后，当前话题会继续使用对应的 CLI 上下文。",
-        },
+        { tag: 'markdown', content: '选择后，当前话题会继续使用对应的 CLI 上下文。' },
         ...elements,
       ],
     },
@@ -582,21 +669,20 @@ export function buildSessionNoticeCard(
   options: SessionNoticeCardOptions,
 ): CardJson {
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: { summary: { content: options.title } },
     header: {
-      template: options.template ?? "blue",
-      title: { tag: "plain_text", content: options.title },
+      template: options.template ?? 'blue',
+      title: { tag: 'plain_text', content: options.title },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
-      elements: [{ tag: "markdown", content: options.detail }],
+      direction: 'vertical',
+      vertical_spacing: '12px',
+      elements: [{ tag: 'markdown', content: options.detail }],
     },
   };
 }
 
-//协作卡片
 export function buildCollaborationCard(
   options: CollaborationCardOptions,
 ): CardJson {
@@ -682,428 +768,266 @@ export function buildCollaborationCard(
   };
 }
 
-//团队卡片
 export function buildTeamCard(options: TeamCardOptions): CardJson {
   const leader = options.members.find((member) => member.isLeader);
   const memberElements = options.members.map((member) => {
     const badges = [
-      member.isLeader ? "Team Leader" : "",
-      member.ready ? "已连接" : "未连接",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    const skills =
-      member.skills.length > 0
-        ? member.skills.map((skill) => `$${skill}`).join("、")
-        : "无";
+      member.isLeader ? 'Team Leader' : '',
+      member.ready ? '已连接' : '未连接',
+    ].filter(Boolean).join(' · ');
+    const skills = member.skills.length > 0
+      ? member.skills.map((skill) => `$${skill}`).join('、')
+      : '无';
     return {
-      tag: "markdown",
+      tag: 'markdown',
       content: [
         `**${escapeFeishuMarkdown(member.displayName)}**  _${badges}_`,
-        escapeFeishuMarkdown(member.role),
+        `${escapeFeishuMarkdown(member.role)}`,
         `引擎：${escapeFeishuMarkdown(member.cliName)}　Skill：${escapeFeishuMarkdown(skills)}`,
-      ].join("\n"),
+      ].join('\n'),
     };
   });
 
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       summary: { content: `Agent 团队：${options.members.length} 位成员` },
     },
     header: {
-      template: "blue",
-      title: { tag: "plain_text", content: "Agent 团队" },
+      template: 'blue',
+      title: { tag: 'plain_text', content: 'Agent 团队' },
       subtitle: {
-        tag: "plain_text",
+        tag: 'plain_text',
         content: leader
           ? `${options.members.length} 位成员 · ${leader.displayName} 负责统筹`
           : `${options.members.length} 位成员`,
       },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
+      direction: 'vertical',
+      vertical_spacing: '12px',
       elements: [
         {
-          tag: "markdown",
-          content:
-            "每位成员使用自己的飞书身份、执行引擎和项目 Skill，工作目录与会话彼此独立。",
+          tag: 'markdown',
+          content: '每位成员使用自己的飞书身份、执行引擎和项目 Skill，工作目录与会话彼此独立。',
         },
-        { tag: "hr" },
+        { tag: 'hr' },
         ...memberElements,
       ],
     },
   };
 }
 
-function clarificationButton(
-  flow: ClarificationFlow,
-  option: { id: string; label: string },
-): Record<string, unknown> {
-  const question = flow.request.questions[flow.currentIndex];
-  const recommendedOptionId =
-    question.recommendedOptionId ?? question.options[0]?.id;
-  return {
-    tag: "button",
-    text: {
-      tag: "plain_text",
-      content:
-        option.id === recommendedOptionId
-          ? option.label.includes("推荐")
-            ? option.label
-            : `${option.label}（推荐）`
-          : option.label,
-    },
-    type: "default",
-    width: "fill",
-    size: "medium",
-    behaviors: [
-      {
-        type: "callback",
-        value: {
-          action: "answer_clarification",
-          flowToken: flow.token,
-          questionId: question.id,
-          optionId: option.id,
-        },
-      },
-    ],
-  };
-}
 
-function clarificationAnswerSummary(flow: ClarificationFlow): string {
-  return flow.answers
-    .map((answer, index) =>
-      [
-        `${index + 1}. **${escapeFeishuMarkdown(answer.prompt)}**`,
-        `${answer.source === "agent" ? "Agent 推荐" : "你的选择"}：${escapeFeishuMarkdown(answer.answer)}`,
-      ].join("\n"),
-    )
-    .join("\n\n");
-}
-
-function clarificationDecisionButton(
-  flow: ClarificationFlow,
-  decisionMode: "current" | "remaining",
-): Record<string, unknown> {
-  const question = flow.request.questions[flow.currentIndex];
-  return {
-    tag: "button",
-    text: {
-      tag: "plain_text",
-      content:
-        decisionMode === "current" ? "这一题交给 Agent 决定" : "按推荐方案继续",
-    },
-    type: decisionMode === "remaining" ? "primary" : "default",
-    width: "fill",
-    size: "medium",
-    behaviors: [
-      {
-        type: "callback",
-        value: {
-          action: "answer_clarification",
-          flowToken: flow.token,
-          questionId: question.id,
-          decisionMode,
-        },
-      },
-    ],
-  };
-}
-
-export function buildClarificationCard(
-  options: ClarificationCardOptions,
-): CardJson {
-  const { flow } = options;
-  const question = flow.request.questions[flow.currentIndex];
-  const current = flow.currentIndex + 1;
-  const total = flow.request.questions.length;
-
-  return {
-    schema: "2.0",
-    config: {
-      update_multi: true,
-      summary: { content: `${flow.request.title}（${current}/${total}）` },
-    },
-    header: {
-      template: "blue",
-      title: { tag: "plain_text", content: flow.request.title },
-      subtitle: { tag: "plain_text", content: `${current} / ${total}` },
-    },
-    body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
-      elements: [
-        ...(flow.request.intro && flow.currentIndex === 0
-          ? [
-              {
-                tag: "markdown",
-                content: escapeFeishuMarkdown(flow.request.intro),
-              },
-            ]
-          : []),
-        ...(flow.answers.length
-          ? [
-              {
-                tag: "markdown",
-                content: `**已确认 ${flow.answers.length} 项**\n\n${clarificationAnswerSummary(flow)}`,
-              },
-              { tag: "hr" },
-            ]
-          : []),
-        {
-          tag: "markdown",
-          content: `**${escapeFeishuMarkdown(question.prompt)}**\n\n选择最符合预期的一项：`,
-        },
-        ...question.options.map((option) => clarificationButton(flow, option)),
-        clarificationDecisionButton(flow, "current"),
-        { tag: "hr" },
-        {
-          tag: "form",
-          name: `clarify_${flow.token.slice(0, 8)}`,
-          vertical_spacing: "8px",
-          elements: [
-            {
-              tag: "input",
-              name: "custom_answer",
-              placeholder: {
-                tag: "plain_text",
-                content: "都不合适？在这里写下你的答案",
-              },
-              max_length: 500,
-            },
-            {
-              tag: "button",
-              name: "submit_custom",
-              action_type: "form_submit",
-              text: { tag: "plain_text", content: "提交自定义答案" },
-              type: "primary",
-              width: "default",
-              size: "medium",
-              value: {
-                action: "answer_clarification",
-                flowToken: flow.token,
-                questionId: question.id,
-                custom: true,
-              },
-            },
-          ],
-        },
-        { tag: "hr" },
-        {
-          tag: "markdown",
-          content:
-            "不想逐项选择？Agent 会保留你已经确认的答案，并为剩余问题采用推荐方案。",
-        },
-        clarificationDecisionButton(flow, "remaining"),
-      ],
-    },
-  };
-}
-
-export function buildClarificationContinuingCard(
-  flow: ClarificationFlow,
-): CardJson {
-  return {
-    schema: "2.0",
-    config: {
-      update_multi: true,
-      summary: { content: `${flow.request.title}：正在整理` },
-    },
-    header: {
-      template: "blue",
-      title: {
-        tag: "plain_text",
-        content: `${flow.request.title} · 正在整理`,
-      },
-    },
-    body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
-      elements: [
-        {
-          tag: "markdown",
-          content: [
-            "**答案已收到**",
-            "正在基于这些选择整理产品说明，无需重复点击。",
-            `**已确认 ${flow.answers.length} 项**\n\n${clarificationAnswerSummary(flow)}`,
-          ].join("\n\n"),
-        },
-      ],
-    },
-  };
-}
-
-export function buildClarificationSupersededCard(
-  flow: ClarificationFlow,
-): CardJson {
-  return {
-    schema: "2.0",
-    config: {
-      update_multi: true,
-      summary: { content: `${flow.request.title}：已收到新的补充` },
-    },
-    header: {
-      template: "grey",
-      title: {
-        tag: "plain_text",
-        content: `${flow.request.title} · 已更新`,
-      },
-    },
-    body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
-      elements: [
-        {
-          tag: "markdown",
-          content: [
-            "**已收到你在话题里的新消息**",
-            "这张卡片已经失效，Agent OS 正在沿用同一个任务上下文处理新的补充。",
-            flow.answers.length
-              ? `此前已确认 ${flow.answers.length} 项，相关答案会一并带入。`
-              : "",
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-      ],
-    },
-  };
-}
-
-/* 只读卡升级为确认卡 */
 function productDocumentList(flow: ProductSpecFlow): string {
-  if (flow.request.deliveryMode === "lark-doc") {
+  if (flow.request.deliveryMode === 'lark-doc') {
     return `☁️ **飞书云文档** · [打开文档](${flow.request.documentUrl})`;
   }
   return [
     `📘 **Spec** · \`${escapeFeishuMarkdown(flow.request.specPath)}\``,
     `🎫 **Tickets** · \`${escapeFeishuMarkdown(flow.request.ticketsPath)}\``,
-  ].join("\n");
+  ].join('\n');
 }
 
-export function buildProductSpecApprovalCard(flow: ProductSpecFlow): CardJson {
+export function buildProductSpecApprovalCard(
+  flow: ProductSpecFlow,
+): CardJson {
   const elements: Record<string, unknown>[] = [
     {
-      tag: "markdown",
+      tag: 'markdown',
       content: [
         `**${escapeFeishuMarkdown(flow.request.title)}**`,
         escapeFeishuMarkdown(flow.request.summary),
-      ].join("\n\n"),
+      ].join('\n\n'),
     },
-    { tag: "hr" },
+    { tag: 'hr' },
     {
-      tag: "markdown",
+      tag: 'markdown',
       content: `**共享产物**\n${productDocumentList(flow)}`,
     },
   ];
 
   elements.push({
-    tag: "button",
-    text: { tag: "plain_text", content: "确认产品方案" },
-    type: "primary_filled",
-    width: "fill",
-    size: "medium",
-    behaviors: [
-      {
-        type: "callback",
-        value: {
-          action: "approve_product_spec",
-          flowToken: flow.token,
-        },
+    tag: 'button',
+    text: { tag: 'plain_text', content: '确认产品方案' },
+    type: 'primary_filled',
+    width: 'fill',
+    size: 'medium',
+    behaviors: [{
+      type: 'callback',
+      value: {
+        action: 'approve_product_spec',
+        flowToken: flow.token,
       },
-    ],
+    }],
   });
 
   elements.push({
-    tag: "markdown",
-    content: "_确认后只记录“产品方案已就绪”，本节不会自动交给开发。_",
+    tag: 'markdown',
+    content: '_确认后，已确认方案会交回 CEO 助理继续安排后续成员。_',
   });
 
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       update_multi: true,
       summary: { content: `${flow.request.title}：待确认` },
     },
     header: {
-      template: "blue",
-      title: { tag: "plain_text", content: "产品文档已生成" },
+      template: 'blue',
+      title: { tag: 'plain_text', content: '产品文档已生成' },
       subtitle: {
-        tag: "plain_text",
-        content:
-          flow.request.deliveryMode === "lark-doc"
-            ? "飞书云文档待确认"
-            : "本地 Spec · Tickets 待确认",
+        tag: 'plain_text',
+        content: flow.request.deliveryMode === 'lark-doc'
+          ? '飞书云文档待确认'
+          : '本地 Spec · Tickets 待确认',
       },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
+      direction: 'vertical',
+      vertical_spacing: '12px',
       elements,
     },
   };
 }
 
-export function buildProductSpecApprovedCard(flow: ProductSpecFlow): CardJson {
+export function buildProductSpecApprovedCard(
+  flow: ProductSpecFlow,
+): CardJson {
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       update_multi: true,
       summary: { content: `${flow.request.title}：已确认` },
     },
     header: {
-      template: "green",
-      title: { tag: "plain_text", content: "产品方案已确认" },
-      subtitle: { tag: "plain_text", content: "产品阶段已就绪" },
+      template: 'green',
+      title: { tag: 'plain_text', content: '产品方案已确认' },
+      subtitle: { tag: 'plain_text', content: '产品阶段已就绪' },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
-      elements: [
-        {
-          tag: "markdown",
-          content: [
-            `**${escapeFeishuMarkdown(flow.request.title)}**`,
-            escapeFeishuMarkdown(flow.request.summary),
-            `**已确认文档**\n${productDocumentList(flow)}`,
-            flow.approvedAt
-              ? `确认时间：${escapeFeishuMarkdown(flow.approvedAt)}`
-              : "",
-            "_本节到这里结束，不会自动派发开发任务。_",
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-      ],
+      direction: 'vertical',
+      vertical_spacing: '12px',
+      elements: [{
+        tag: 'markdown',
+        content: [
+          `**${escapeFeishuMarkdown(flow.request.title)}**`,
+          escapeFeishuMarkdown(flow.request.summary),
+          `**已确认文档**\n${productDocumentList(flow)}`,
+          flow.approvedAt
+            ? `确认时间：${escapeFeishuMarkdown(flow.approvedAt)}`
+            : '',
+          '_确认结果已交回团队负责人，等待下一步安排。_',
+        ].filter(Boolean).join('\n\n'),
+      }],
     },
   };
 }
 
-export function buildProductSpecExpiredCard(flow: ProductSpecFlow): CardJson {
+export function buildProductSpecExpiredCard(
+  flow: ProductSpecFlow,
+): CardJson {
   return {
-    schema: "2.0",
+    schema: '2.0',
     config: {
       update_multi: true,
       summary: { content: `${flow.request.title}：已失效` },
     },
     header: {
-      template: "grey",
-      title: { tag: "plain_text", content: "产品方案确认已失效" },
+      template: 'grey',
+      title: { tag: 'plain_text', content: '产品方案确认已失效' },
     },
     body: {
-      direction: "vertical",
-      vertical_spacing: "12px",
-      elements: [
-        {
-          tag: "markdown",
-          content: [
-            `**${escapeFeishuMarkdown(flow.request.title)}**`,
-            "同一任务已经提交了更新的产品方案，请查看话题中最新的确认卡。",
-          ].join("\n\n"),
-        },
-      ],
+      direction: 'vertical',
+      vertical_spacing: '12px',
+      elements: [{
+        tag: 'markdown',
+        content: [
+          `**${escapeFeishuMarkdown(flow.request.title)}**`,
+          '同一任务已经提交了更新的产品方案，请查看话题中最新的确认卡。',
+        ].join('\n\n'),
+      }],
     },
   };
+}
+
+export function answerNeedsContinuation(answer: string): boolean {
+  return answer.length > MAX_CARD_ANSWER_LENGTH;
+}
+
+export function answerContinuation(answer: string): string {
+  return answer.slice(markdownSplitIndex(answer, MAX_CARD_ANSWER_LENGTH));
+}
+
+export function splitLongText(text: string, maxLength = 4_000): string[] {
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > maxLength) {
+    const newline = remaining.lastIndexOf('\n', maxLength);
+    const splitAt = newline > maxLength / 2 ? newline : maxLength;
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+type UpdateCard = (card: CardJson) => Promise<void>;
+
+/** 一秒窗口内无论 push 多少次，只提交最新的一张卡片。 */
+export class ThrottledCardUpdater {
+  private pendingCard: CardJson | undefined;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private updateChain: Promise<void> = Promise.resolve();
+  private closed = false;
+
+  constructor(
+    private readonly updateCard: UpdateCard,
+    private readonly intervalMs = 1_000,
+  ) {}
+
+  push(card: CardJson): void {
+    if (this.closed) return;
+    this.pendingCard = card;
+    this.schedule();
+  }
+
+  async finish(finalCard: CardJson): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.pendingCard = undefined;
+    await this.updateChain.catch(() => undefined);
+    await this.updateCard(finalCard);
+  }
+
+  async cancel(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.pendingCard = undefined;
+    await this.updateChain.catch(() => undefined);
+  }
+
+  private schedule(): void {
+    if (this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.flushPending();
+    }, this.intervalMs);
+  }
+
+  private flushPending(): void {
+    const card = this.pendingCard;
+    this.pendingCard = undefined;
+    if (!card || this.closed) return;
+
+    this.updateChain = this.updateChain
+      .then(() => this.updateCard(card))
+      .finally(() => {
+        if (this.pendingCard && !this.closed) this.schedule();
+      });
+  }
 }

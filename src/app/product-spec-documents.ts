@@ -1,8 +1,6 @@
-/* 只展示真实落盘的文件 */
-
-import { readdir, stat } from "node:fs/promises";
-import { resolve } from "node:path";
-import type { LocalProductSpecRequest } from "../core/product-spec.js";
+import { readdir, stat } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import type { LocalProductSpecRequest } from '../core/product-spec.js';
 
 export async function assertProductSpecDocuments(
   workspaceDir: string,
@@ -24,7 +22,7 @@ export async function assertProductSpecDocuments(
       ? await readdir(ticketsDir, { withFileTypes: true })
       : [];
     const hasTicket = entries.some(
-      (entry) => entry.isFile() && entry.name.endsWith(".md"),
+      (entry) => entry.isFile() && entry.name.endsWith('.md'),
     );
     if (!info.isDirectory() || !hasTicket) {
       missing.push(`Tickets: ${request.ticketsPath}`);
@@ -34,11 +32,9 @@ export async function assertProductSpecDocuments(
   }
 
   if (missing.length) {
-    throw new Error(
-      [
-        "产品方案尚未完整写入工作区，不能展示。",
-        ...missing.map((item) => `- ${item}`),
-      ].join("\n"),
-    );
+    throw new Error([
+      '产品方案尚未完整写入工作区，不能展示。',
+      ...missing.map((item) => `- ${item}`),
+    ].join('\n'));
   }
 }

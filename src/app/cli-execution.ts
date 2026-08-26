@@ -1,7 +1,6 @@
 import { runCli } from "../cli/runner.js";
 import type { CliAdapter } from "../cli/types.js";
 
-
 export function executeCli(
   adapter: CliAdapter,
   prompt: string,

@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { z } from "zod";
-import type { Session } from "./session-manager.js";
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { z } from 'zod';
+import type { Session } from './session-manager.js';
 
 export interface SessionStore {
   load(): Promise<Session[]>;
@@ -13,18 +13,18 @@ const SessionSchema = z.object({
   botId: z.string().min(1),
   threadId: z.string().min(1),
   chatId: z.string().min(1),
-  cliId: z.enum(["claude", "codex"]),
+  cliId: z.enum(['claude', 'codex']),
   cliSessionId: z.string().min(1).optional(),
-    workspaceDir: z.string().min(1),
-  status: z.enum(["creating", "active", "idle", "closed"]),
+  workspaceDir: z.string().min(1),
+  status: z.enum(['creating', 'active', 'idle', 'closed']),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
 
 function recoverInterruptedSession(session: Session): Session {
-  if (session.status !== "creating" && session.status !== "active")
+  if (session.status !== 'creating' && session.status !== 'active')
     return session;
-  return { ...session, status: "idle" };
+  return { ...session, status: 'idle' };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -59,16 +59,16 @@ export class JsonSessionStore implements SessionStore {
 
   constructor(
     private readonly filePath: string,
-    private readonly legacyBotId = "default",
-        private readonly defaultWorkspaces: Readonly<Record<string, string>> = {},
+    private readonly legacyBotId = 'default',
+    private readonly defaultWorkspaces: Readonly<Record<string, string>> = {},
   ) {}
 
   async load(): Promise<Session[]> {
     let content: string;
     try {
-      content = await readFile(this.filePath, "utf8");
+      content = await readFile(this.filePath, 'utf8');
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
       throw error;
     }
 
@@ -80,7 +80,7 @@ export class JsonSessionStore implements SessionStore {
     const sessions: Session[] = [];
     let needsCleanup = false;
     for (const row of rows) {
-          const { candidate, migrated } = migrateLegacySession(
+      const { candidate, migrated } = migrateLegacySession(
         row,
         this.legacyBotId,
         this.defaultWorkspaces,
@@ -105,7 +105,7 @@ export class JsonSessionStore implements SessionStore {
     const write = async () => {
       await mkdir(dirname(this.filePath), { recursive: true });
       const tempPath = `${this.filePath}.tmp`;
-      await writeFile(tempPath, `${snapshot}\n`, "utf8");
+      await writeFile(tempPath, `${snapshot}\n`, 'utf8');
       await rename(tempPath, this.filePath);
     };
 

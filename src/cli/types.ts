@@ -1,4 +1,4 @@
-export type CliId = "claude" | "codex";
+export type CliId = 'claude' | 'codex';
 
 export type CliPromptInput = 'argument' | 'stdin';
 
@@ -9,16 +9,18 @@ export function promptInputForPlatform(platform: NodeJS.Platform): CliPromptInpu
 
 export type CliCompactPlan =
   | {
-      protocol: "claude-stream-json";
+      protocol: 'claude-stream-json';
       command: string;
       args: string[];
+      prompt: string;
     }
   | {
-      protocol: "codex-app-server";
+      protocol: 'codex-app-server';
       command: string;
       args: string[];
       sessionId: string;
     };
+
 export interface CliRunStats {
   durationMs?: number;
   turns?: number;
@@ -31,25 +33,31 @@ export interface CliRunStats {
   contextWindowTokens?: number;
 }
 
+export interface CliSessionSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
 export type CliEvent =
-  | { type: "session"; sessionId: string }
+  | { type: 'session'; sessionId: string }
   | {
-      type: "tool_start";
+      type: 'tool_start';
       toolUseId: string;
       toolName: string;
       label: string;
       detail?: string;
     }
-  | { type: "tool_end"; toolUseId: string; failed: boolean }
-  | { type: "context"; usedTokens: number }
+  | { type: 'tool_end'; toolUseId: string; failed: boolean }
+  | { type: 'context'; usedTokens: number }
   | {
-      type: "tool_call";
+      type: 'tool_call';
       toolUseId: string;
       toolName: string;
       input: unknown;
     }
-  | { type: "result"; answer: string; sessionId?: string; stats?: CliRunStats }
-  | { type: "error"; message: string; sessionId?: string };
+  | { type: 'result'; answer: string; sessionId?: string; stats?: CliRunStats }
+  | { type: 'error'; message: string; sessionId?: string };
 
 export interface CliAdapter {
   readonly id: CliId;
@@ -74,9 +82,4 @@ export interface CliRunResult {
     toolName: string;
     input: unknown;
   }>;
-}
-export interface CliSessionSummary {
-  id: string;
-  title: string;
-  updatedAt: string;
 }

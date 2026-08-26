@@ -1,17 +1,14 @@
-/* 定义产品文档的提交格式  */
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import type { CollaborationOrigin } from './collaboration.js';
 
-import { randomUUID } from "node:crypto";
-import { z } from "zod";
-import { CollaborationMessage } from "./collaboration";
-
-const WorkspaceDocumentPathSchema = z
-  .string()
+const WorkspaceDocumentPathSchema = z.string()
   .trim()
   .min(1)
   .max(240)
   .refine(
-    (value) => !value.startsWith("/") && !value.split(/[\\/]/).includes(".."),
-    "文档路径必须位于当前工作目录内",
+    (value) => !value.startsWith('/') && !value.split(/[\\/]/).includes('..'),
+    '文档路径必须位于当前工作目录内',
   );
 
 const ProductSpecBaseSchema = z.object({
@@ -19,61 +16,42 @@ const ProductSpecBaseSchema = z.object({
   summary: z.string().trim().min(1).max(500),
 });
 
-const LarkDocumentUrlSchema = z
-  .url()
-  .refine(
-    (value) => /\/docx\//.test(new URL(value).pathname),
-    "documentUrl 必须是飞书 Docx 文档链接",
-  );
+const LarkDocumentUrlSchema = z.url().refine(
+  (value) => /\/docx\//.test(new URL(value).pathname),
+  'documentUrl 必须是飞书 Docx 文档链接',
+);
 
 export const LocalProductSpecRequestSchema = ProductSpecBaseSchema.extend({
-  deliveryMode: z.literal("local"),
+  deliveryMode: z.literal('local'),
   specPath: WorkspaceDocumentPathSchema,
   ticketsPath: WorkspaceDocumentPathSchema,
 }).strict();
 
 export const LarkProductSpecRequestSchema = ProductSpecBaseSchema.extend({
-  deliveryMode: z.literal("lark-doc"),
+  deliveryMode: z.literal('lark-doc'),
   documentUrl: LarkDocumentUrlSchema,
 }).strict();
 
-export const ProductSpecRequestSchema = z.discriminatedUnion("deliveryMode", [
+export const ProductSpecRequestSchema = z.discriminatedUnion('deliveryMode', [
   LocalProductSpecRequestSchema,
   LarkProductSpecRequestSchema,
 ]);
 
 export type ProductSpecRequest = z.infer<typeof ProductSpecRequestSchema>;
-
 export type LocalProductSpecRequest = z.infer<
   typeof LocalProductSpecRequestSchema
 >;
 
-export interface CollaborationOrigin {
-  taskId: string;
-  fromBotId: string;
-  reportToBotId: string;
-  round: number;
-  maxRounds: number;
-}
-
-export const CollaborationOriginSchema = z.object({
-  taskId: z.string().min(1),
-  fromBotId: z.string().min(1),
-  reportToBotId: z.string().min(1),
-  round: z.number().int().min(1),
-  maxRounds: z.number().int().min(1),
-});
-
 export interface ProductSpecFlow {
   token: string;
-  taskId: string; // 把方案绑定到飞书话题对应的产品任务，
-  botId: string; // 保证卡片只能由提交方案的产品机器人处理。
+  taskId: string;
+  botId: string;
   sessionId: string;
-  ownerOpenId: string; // 用来验证操作者。
-  ownerUnionId?: string; // 用来验证操作者。
+  ownerOpenId: string;
+  ownerUnionId?: string;
   collaboration?: CollaborationOrigin;
   request: ProductSpecRequest;
-  status: "pending" | "approved" | "expired";
+  status: 'pending' | 'approved' | 'expired';
   approvedAt?: string;
 }
 
@@ -87,24 +65,12 @@ export interface CreateProductSpecFlowOptions {
   request: ProductSpecRequest;
 }
 
-export function collaborationOrigin(
-  message: CollaborationMessage,
-): CollaborationOrigin {
-  return {
-    taskId: message.taskId,
-    fromBotId: message.fromBotId,
-    reportToBotId: message.reportToBotId,
-    round: message.round,
-    maxRounds: message.maxRounds,
-  };
-}
-
 export function findProductSpecRequest(
   toolCalls: Array<{ toolName: string; input: unknown }> | undefined,
 ): ProductSpecRequest | undefined {
   for (let index = (toolCalls?.length ?? 0) - 1; index >= 0; index -= 1) {
     const call = toolCalls?.[index];
-    if (call?.toolName !== "request_spec_approval") continue;
+    if (call?.toolName !== 'request_spec_approval') continue;
     const parsed = ProductSpecRequestSchema.safeParse(call.input);
     if (parsed.success) return parsed.data;
   }
@@ -112,7 +78,7 @@ export function findProductSpecRequest(
 }
 
 export function isProductSpecOwner(
-  flow: Pick<ProductSpecFlow, "ownerOpenId" | "ownerUnionId">,
+  flow: Pick<ProductSpecFlow, 'ownerOpenId' | 'ownerUnionId'>,
   operator: { operatorOpenId: string; operatorUnionId?: string },
 ): boolean {
   if (flow.ownerUnionId && operator.operatorUnionId) {
@@ -133,17 +99,17 @@ export class ProductSpecFlowStore {
   create(options: CreateProductSpecFlowOptions): ProductSpecFlow {
     for (const flow of this.flows.values()) {
       if (
-        flow.taskId === options.taskId &&
-        flow.botId === options.botId &&
-        flow.status === "pending"
+        flow.taskId === options.taskId
+        && flow.botId === options.botId
+        && flow.status === 'pending'
       ) {
-        flow.status = "expired";
+        flow.status = 'expired';
       }
     }
     const flow: ProductSpecFlow = {
-      token: randomUUID().replaceAll("-", ""),
+      token: randomUUID().replaceAll('-', ''),
       ...options,
-      status: "pending",
+      status: 'pending',
     };
     this.flows.set(flow.token, flow);
     return flow;
@@ -159,20 +125,19 @@ export class ProductSpecFlowStore {
   ): ProductSpecFlow | undefined {
     for (const flow of this.flows.values()) {
       if (
-        flow.botId === botId &&
-        (flow.status === "pending" || flow.status === "approved") &&
-        flow.request.deliveryMode === "lark-doc" &&
-        documentToken(flow.request.documentUrl) === fileToken
-      )
-        return flow;
+        flow.botId === botId
+        && flow.status === 'pending'
+        && flow.request.deliveryMode === 'lark-doc'
+        && documentToken(flow.request.documentUrl) === fileToken
+      ) return flow;
     }
     return undefined;
   }
 
   approve(token: string): ProductSpecFlow | undefined {
     const flow = this.flows.get(token);
-    if (!flow || flow.status !== "pending") return undefined;
-    flow.status = "approved";
+    if (!flow || flow.status !== 'pending') return undefined;
+    flow.status = 'approved';
     flow.approvedAt = new Date().toISOString();
     return flow;
   }

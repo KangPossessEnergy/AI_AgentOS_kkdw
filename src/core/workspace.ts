@@ -1,12 +1,12 @@
-import { stat } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { stat } from 'node:fs/promises';
+import { isAbsolute, resolve } from 'node:path';
 
 export function resolveWorkspacePath(
   input: string,
   baseDirectory = process.cwd(),
 ): string {
   const value = input.trim();
-  if (!value) throw new Error("工作目录不能为空");
+  if (!value) throw new Error('工作目录不能为空');
   return isAbsolute(value) ? resolve(value) : resolve(baseDirectory, value);
 }
 

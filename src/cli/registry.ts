@@ -1,6 +1,6 @@
-import { ClaudeAdapter } from "./claude-adapter.js";
-import { CodexAdapter } from "./codex-adapter.js";
-import type { CliAdapter, CliId } from "./types.js";
+import { ClaudeAdapter } from './claude-adapter.js';
+import { CodexAdapter } from './codex-adapter.js';
+import type { CliAdapter, CliId } from './types.js';
 
 const adapters: Record<CliId, CliAdapter> = {
   claude: new ClaudeAdapter(),
@@ -16,7 +16,7 @@ export function listCliAdapters(): CliAdapter[] {
 }
 
 export function parseCliId(value: string | undefined): CliId {
-  if (!value) return "claude";
-  if (value === "claude" || value === "codex") return value;
+  if (!value) return 'claude';
+  if (value === 'claude' || value === 'codex') return value;
   throw new Error(`不支持的 DEFAULT_CLI: ${value}，请填写 claude 或 codex`);
 }

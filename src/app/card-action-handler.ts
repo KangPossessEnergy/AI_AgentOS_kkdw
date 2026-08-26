@@ -220,7 +220,6 @@ export function createCardActionHandler(options: {
           ownerOpenId: answered.flow.ownerOpenId,
         });
         runtime.clarificationFlows.delete(flowToken);
-        //       //不会创建新线程。它让当前回调先把 toast 和新卡片交给飞书，随后仍在同一个 Node.js 进程里启动异步 CLI 工作。
         queueMicrotask(() => {
           void continueClarificationFlow({
             runtime,

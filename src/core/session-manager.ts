@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
-import type { CliId } from "../cli/types.js";
-import type { SessionStore } from "./session-store.js";
+import { randomUUID } from 'node:crypto';
+import type { CliId } from '../cli/types.js';
+import type { SessionStore } from './session-store.js';
 
-export type SessionStatus = "creating" | "active" | "idle" | "closed";
+export type SessionStatus = 'creating' | 'active' | 'idle' | 'closed';
 
 export interface Session {
   id: string;
@@ -36,9 +36,9 @@ export interface SessionManagerOptions {
 }
 
 const ALLOWED_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
-  creating: ["active", "idle", "closed"],
-  active: ["idle", "closed"],
-  idle: ["active", "closed"],
+  creating: ['active', 'idle', 'closed'],
+  active: ['idle', 'closed'],
+  idle: ['active', 'closed'],
   closed: [],
 };
 
@@ -86,11 +86,10 @@ export class SessionManager {
     );
   }
 
-  //负责查找或创建话题会话
   async resolve(
     message: MessageAddress,
-    cliId: CliId = "claude",
-    botId = "default",
+    cliId: CliId = 'claude',
+    botId = 'default',
     workspaceDir = process.cwd(),
   ): Promise<ResolvedSession> {
     const threadId = topicIdOf(message);
@@ -106,7 +105,7 @@ export class SessionManager {
       chatId: message.chatId,
       cliId,
       workspaceDir,
-      status: "creating",
+      status: 'creating',
       createdAt: now,
       updatedAt: now,
     };
@@ -150,7 +149,7 @@ export class SessionManager {
     sessionId: string,
     cliSessionId: string,
   ): Promise<Session> {
-    if (!cliSessionId) throw new Error("CLI 会话 ID 不能为空");
+    if (!cliSessionId) throw new Error('CLI 会话 ID 不能为空');
     return this.updateCliSelection(sessionId, cliSessionId);
   }
 
@@ -164,7 +163,6 @@ export class SessionManager {
   ): Promise<Session> {
     const current = this.get(sessionId);
     if (!current) throw new Error(`会话不存在: ${sessionId}`);
-
     const updated: Session = {
       ...current,
       cliSessionId,
@@ -181,14 +179,13 @@ export class SessionManager {
     return updated;
   }
 
-  // 会保留飞书话题，同时让下一条任务重新建立 CLI 会话。
   async setWorkspaceDir(
     sessionId: string,
     workspaceDir: string,
   ): Promise<Session> {
     const current = this.get(sessionId);
     if (!current) throw new Error(`会话不存在: ${sessionId}`);
-    if (!workspaceDir) throw new Error("工作目录不能为空");
+    if (!workspaceDir) throw new Error('工作目录不能为空');
     if (current.workspaceDir === workspaceDir) return current;
 
     const { cliSessionId: _previousCliSessionId, ...rest } = current;

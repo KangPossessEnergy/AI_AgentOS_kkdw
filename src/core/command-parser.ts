@@ -1,9 +1,9 @@
-import type { CliId } from "../cli/types.js";
+import type { CliId } from '../cli/types.js';
 
 export type SlashCommand =
-  | { name: "close" | "status" | "help" | "new" | "resume" | "team" }
-  | { name: "compact"; instructions?: string }
-  | { name: "cd"; path?: string };
+  | { name: 'close' | 'status' | 'help' | 'new' | 'resume' | 'team' }
+  | { name: 'compact'; instructions?: string }
+  | { name: 'cd'; path?: string };
 
 const COMMAND_RE = /^(?:@.+?\s+)?\/(close|status|help|new|resume|team)\s*$/;
 const CD_RE = /^(?:@.+?\s+)?\/cd(?:\s+([\s\S]+?))?\s*$/;
@@ -13,18 +13,18 @@ const CLI_REQUEST_RE = /^(?:@.+?\s+)?\/(claude|codex)(?:\s+([\s\S]*))?$/;
 export function parseCommand(text: string): SlashCommand | undefined {
   const value = text.trim();
   const cdMatch = CD_RE.exec(value);
-  if (cdMatch) return { name: "cd", path: cdMatch[1]?.trim() || undefined };
+  if (cdMatch) return { name: 'cd', path: cdMatch[1]?.trim() || undefined };
   const compactMatch = COMPACT_RE.exec(value);
   if (compactMatch) {
     return {
-      name: "compact",
+      name: 'compact',
       instructions: compactMatch[1]?.trim() || undefined,
     };
   }
   const match = COMMAND_RE.exec(value);
   if (!match) return undefined;
   return {
-    name: match[1] as "close" | "status" | "help" | "new" | "resume" | "team",
+    name: match[1] as 'close' | 'status' | 'help' | 'new' | 'resume' | 'team',
   };
 }
 
@@ -38,6 +38,6 @@ export function parseCliRequest(text: string): CliRequest | undefined {
   if (!match) return undefined;
   return {
     cliId: match[1] as CliId,
-    prompt: (match[2] ?? "").trim(),
+    prompt: (match[2] ?? '').trim(),
   };
 }

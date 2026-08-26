@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
-import { basename } from "node:path";
-import type { Bot } from "../im/lark.js";
-import { buildCollaborationCard } from "../im/card.js";
-import type { BotConfig } from "../core/bot-registry.js";
-import type { CollaborationMessage } from "../core/collaboration.js";
-import type { AppRuntime } from "./runtime.js";
+import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
+import type { Bot } from '../im/lark.js';
+import { buildCollaborationCard } from '../im/card.js';
+import type { BotConfig } from '../core/bot-registry.js';
+import type { CollaborationMessage } from '../core/collaboration.js';
+import type { AppRuntime } from './runtime.js';
 
 export interface CollaborationDispatch {
   senderConfig: BotConfig;
@@ -30,11 +30,10 @@ export class CollaborationService {
     const target = this.runtime.botRuntimes.get(options.targetBotId);
     if (!target) throw new Error(`协作 bot 尚未就绪: ${options.targetBotId}`);
     const reportTo = this.runtime.botRuntimes.get(options.reportToBotId);
-    if (!reportTo)
-      throw new Error(`结果接收 bot 尚未就绪: ${options.reportToBotId}`);
+    if (!reportTo) throw new Error(`结果接收 bot 尚未就绪: ${options.reportToBotId}`);
 
     const collaboration: CollaborationMessage = {
-      dispatchId: randomUUID().replaceAll("-", "").slice(0, 12),
+      dispatchId: randomUUID().replaceAll('-', '').slice(0, 12),
       taskId: options.taskId,
       ownerOpenId: options.ownerOpenId,
       ownerUnionId: options.ownerUnionId,
@@ -54,9 +53,8 @@ export class CollaborationService {
       const cardMessageId = await options.senderBot.replyCard(
         options.replyToMessageId,
         buildCollaborationCard({
-          senderName:
-            this.runtime.botRuntimes.get(options.senderConfig.id)?.identity
-              .name ?? options.senderConfig.id,
+          senderName: this.runtime.botRuntimes.get(options.senderConfig.id)
+            ?.identity.name ?? options.senderConfig.id,
           targetName: target.identity.name,
           reportToName: reportTo.identity.name,
           workspaceName: basename(options.workspaceDir),
@@ -69,7 +67,7 @@ export class CollaborationService {
         true,
       );
       if (!cardMessageId) {
-        throw new Error("飞书没有返回协作卡片 message_id");
+        throw new Error('飞书没有返回协作卡片 message_id');
       }
       const mentionMessageId = await options.senderBot.replyMention(
         cardMessageId,
@@ -80,7 +78,7 @@ export class CollaborationService {
         true,
       );
       if (!mentionMessageId) {
-        throw new Error("飞书没有返回协作通知 message_id");
+        throw new Error('飞书没有返回协作通知 message_id');
       }
     } catch (error) {
       this.runtime.collaborationInbox.consume(

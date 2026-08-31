@@ -20,6 +20,7 @@ export interface RunCliOptions {
   sessionId?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  stopToolNames?: string[];
   env?: Record<string, string>;
   onEvent?: (event: CliEvent) => void;
 }
@@ -32,6 +33,7 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     sessionId,
     signal,
     timeoutMs = envTimeoutMs(adapter) ?? DEFAULT_TIMEOUT_MS,
+    stopToolNames = [],
     env,
     onEvent,
   } = options;
@@ -67,6 +69,9 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
       NonNullable<CliRunResult['toolCalls']>[number]
     >();
     let finalResult: CliRunResult | undefined;
+    let stoppedByToolCall:
+      | NonNullable<CliRunResult['toolCalls']>[number]
+      | undefined;
     let resultError: Error | undefined;
     let stderr = '';
     let settled = false;
@@ -97,6 +102,17 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
         }
         if (event.type === 'tool_call') {
           observedToolCalls.set(event.toolUseId, event);
+          if (
+            !stoppedByToolCall
+            && stopToolNames.includes(event.toolName)
+          ) {
+            stoppedByToolCall = {
+              toolUseId: event.toolUseId,
+              toolName: event.toolName,
+              input: event.input,
+            };
+            killCli(child);
+          }
           continue;
         }
         if (event.type === 'tool_end' && event.failed) {
@@ -132,6 +148,16 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     });
     child.once('close', (code) => {
       if (settled) return;
+      if (stoppedByToolCall) {
+        settled = true;
+        finish();
+        resolve({
+          answer: observedAnswer ?? '',
+          sessionId: observedSessionId,
+          toolCalls: [stoppedByToolCall],
+        });
+        return;
+      }
       if (timedOut) {
         return fail(new Error(`${adapter.displayName} 执行超时`));
       }

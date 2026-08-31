@@ -79,6 +79,7 @@ export async function continueClarificationFlow(options: {
       session.workspaceDir,
       session.cliSessionId,
       run.signal,
+      [],
       (event) => {
         if (
           event.type !== 'tool_start'
@@ -138,6 +139,7 @@ export async function continueClarificationFlow(options: {
           session.workspaceDir,
           resultSessionId ?? session.cliSessionId,
           run.signal,
+          [],
           (event) => {
             if (
               event.type !== 'tool_start'

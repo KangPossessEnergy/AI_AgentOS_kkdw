@@ -1,6 +1,6 @@
 /**
- * Agent OS 入口。
- * 当前阶段：主动式Agent。
+ * Agent OS 入口
+ * 
  */
 import 'dotenv/config';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -893,7 +893,14 @@ async function startConfiguredBot(
   botRuntimes.set(config.id, botRuntime);
   persistBotIdentities();
   if (config.skills.includes('lark-drive')) {
-    await startedBot.subscribeToDocumentComments();
+    try {
+      await startedBot.subscribeToDocumentComments();
+    } catch (error) {
+      console.warn(
+        `[Bot ${config.id}] 文档评论订阅失败，不影响消息链路:`,
+        (error as Error).message,
+      );
+    }
   }
   console.log(
     `[Bot ${config.id.toUpperCase()}] 已连接 name=${identity.name} open_id=${identity.openId}`,
